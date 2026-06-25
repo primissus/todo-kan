@@ -21,6 +21,7 @@ A web app that can be **statically generated** to create and manage multiple
    3. **Clear all** — must type `delete all tasks` to confirm.
    4. **Export** → JSON, with a selection list (incl. select-all) of which lists/boards to export.
    5. **Import** → import multiple lists.
+   6. Shows the app **version** at the bottom (read from `package.json` at build time).
 8. Whole site builds statically with **`pnpm build`**.
 9. Whole site builds to a **single HTML file** with **`pnpm build:single`**.
 
@@ -47,6 +48,29 @@ A web app that can be **statically generated** to create and manage multiple
 9. Tasks can be **reordered vertically** and **moved across columns** via drag-and-drop.
 10. A "clear" button with a confirmation modal requiring the word **`clear`**.
 11. Tasks can be archived; a button shows archived; archived can be unarchived.
+
+### Keyboard navigation (12)
+
+Vim-style keyboard control, available across the app (added after the initial spec).
+
+1. **`j` / `k` / `h` / `l` and arrow keys** move a **selection cursor**. Kanban:
+   `j`/`k` within a column, `h`/`l` between columns. TODO: `j`/`k` between rows.
+   Home: across list/board cards.
+2. **`m`** picks up the selected item to **move** it; `j`/`k`/`h`/`l`/arrows
+   relocate it live, **Enter** drops it, **Esc** snaps it back. Works for Kanban
+   cards (reorder + change column), TODO rows (reorder), and Home cards (reorder).
+3. **Enter** opens the selected item — edit a task, or open a board from Home.
+4. **`a`** archives the selected item (and advances the cursor).
+5. **Shift+A** toggles archived — the per-board archived drawer, or "show archived"
+   on Home.
+6. **Shift+C** opens the Kanban columns settings.
+7. **Shift+N** creates a new task/card (in a board) or a new list (on Home).
+8. **`/`**, **⌘K**, **Ctrl+K** open a **search palette** over the current board's
+   tasks (lists/boards on Home); choosing a result jumps the cursor to it.
+9. **`f`** enters **hint mode** (Vimium-style) — type the label over any clickable
+   element to activate it.
+10. **`?`** opens a **help dialog** listing every shortcut; a header button opens it too.
+11. Shortcuts are ignored while typing in a field or while a dialog is open.
 
 ## Locked stack decisions
 

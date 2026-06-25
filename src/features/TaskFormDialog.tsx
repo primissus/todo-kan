@@ -99,7 +99,18 @@ export function TaskFormDialog({
             <DialogTitle>{heading}</DialogTitle>
           </DialogHeader>
 
-          <div className="grid gap-4">
+          {/*
+           * Real <form> so Enter natively submits from any single-line input
+           * (title, the empty chips input) — the description <Textarea> keeps
+           * Enter for newlines, with Cmd/Ctrl+Enter as a submit shortcut.
+           */}
+          <form
+            className="grid gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              submit();
+            }}
+          >
             <div className="grid gap-2">
               <Label htmlFor="task-title">Title</Label>
               <Input
@@ -107,9 +118,6 @@ export function TaskFormDialog({
                 autoFocus
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit();
-                }}
                 placeholder="What needs doing?"
               />
             </div>
@@ -120,6 +128,9 @@ export function TaskFormDialog({
                 id="task-desc"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit();
+                }}
                 placeholder="Optional details…"
                 rows={3}
               />
@@ -155,16 +166,20 @@ export function TaskFormDialog({
                 placeholder="Add labels…"
               />
             </div>
-          </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button onClick={submit} disabled={!valid}>
-              {mode === 'edit' ? 'Save' : 'Add'}
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={!valid}>
+                {mode === 'edit' ? 'Save' : 'Add'}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 

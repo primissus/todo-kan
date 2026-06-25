@@ -22,6 +22,7 @@ import { ArchivedTasksDrawer } from '@/features/ArchivedTasksDrawer';
 import { ColumnsSettings } from '@/features/kanban/ColumnsSettings';
 import { TypeToConfirmModal } from '@/components/TypeToConfirmModal';
 import { useAppStore } from '@/store/useAppStore';
+import { useUiStore } from '@/store/useUiStore';
 import { useAllTags, useBoard, useBoardTasks } from '@/store/selectors';
 import type { ColumnId } from '@/lib/types/domain';
 
@@ -49,12 +50,18 @@ export function KanbanView({ boardId }: KanbanViewProps) {
   const archiveDone = useAppStore((s) => s.archiveDone);
   const clearBoard = useAppStore((s) => s.clearBoard);
 
-  const [newOpen, setNewOpen] = useState(false);
+  // Modal flags live in useUiStore so the global keymap can open them directly.
+  const newOpen = useUiStore((s) => s.newOpen);
+  const setNewOpen = useUiStore((s) => s.setNewOpen);
+  const editId = useUiStore((s) => s.editId);
+  const setEditId = useUiStore((s) => s.setEditId);
+  const archivedOpen = useUiStore((s) => s.archivedOpen);
+  const setArchivedOpen = useUiStore((s) => s.setArchivedOpen);
+  const columnsOpen = useUiStore((s) => s.kanbanColumnsOpen);
+  const setColumnsOpen = useUiStore((s) => s.setKanbanColumnsOpen);
+
   const [newColumnId, setNewColumnId] = useState<ColumnId | null>(null);
-  const [editId, setEditId] = useState<string | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
-  const [archivedOpen, setArchivedOpen] = useState(false);
-  const [columnsOpen, setColumnsOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -167,22 +174,32 @@ export function KanbanView({ boardId }: KanbanViewProps) {
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveId(null)}
       >
-        <div className="flex gap-3 overflow-x-auto pb-4">
-          {board.columns
-            .slice()
-            .sort((a, b) => a.order - b.order)
-            .map((col) => (
-              <Column
-                key={col.id}
-                column={col}
-                tasks={active.filter((t) => t.columnId === col.id)}
-                onAdd={(colId) => {
-                  setNewColumnId(colId as ColumnId);
-                  setNewOpen(true);
-                }}
-                onEditTask={(taskId) => setEditId(taskId)}
-              />
-            ))}
+        {/*
+         * Mobile: columns stack vertically (full width). md+: full-bleed
+         * horizontal scroller — `mx-[calc(50%-50vw)]` breaks out of <main>'s
+         * max-w-6xl container to span the whole viewport, with px padding so
+         * cards aren't flush to the edges. The inner `w-max mx-auto` track
+         * centers the columns when they fit and collapses its margins (no
+         * edge clipping, padding preserved) when they overflow and scroll.
+         */}
+        <div className="pb-4 md:mx-[calc(50%-50vw)] md:overflow-x-auto md:px-[20vw]">
+          <div className="flex flex-col gap-3 md:w-max md:flex-row md:mx-auto">
+            {board.columns
+              .slice()
+              .sort((a, b) => a.order - b.order)
+              .map((col) => (
+                <Column
+                  key={col.id}
+                  column={col}
+                  tasks={active.filter((t) => t.columnId === col.id)}
+                  onAdd={(colId) => {
+                    setNewColumnId(colId as ColumnId);
+                    setNewOpen(true);
+                  }}
+                  onEditTask={(taskId) => setEditId(taskId)}
+                />
+              ))}
+          </div>
         </div>
 
         <DragOverlay>
@@ -192,7 +209,11 @@ export function KanbanView({ boardId }: KanbanViewProps) {
 
       <TaskFormDialog
         open={newOpen}
-        onOpenChange={setNewOpen}
+        onOpenChange={(o) => {
+          setNewOpen(o);
+          // Don't let a per-column "+" target leak into the next open (e.g. Shift+N).
+          if (!o) setNewColumnId(null);
+        }}
         mode="create"
         heading="New card"
         columns={board.columns}

@@ -1,18 +1,26 @@
 import { useEffect, useState } from 'react';
-import { Settings } from 'lucide-react';
+import { Keyboard, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Toaster } from '@/components/ui/sonner';
 import { SettingsDialog } from '@/components/SettingsDialog';
+import { CommandPalette } from '@/components/CommandPalette';
+import { HelpDialog } from '@/components/HelpDialog';
+import { HintOverlay } from '@/components/HintOverlay';
+import { KeyboardStatus } from '@/components/KeyboardStatus';
 import { useSystemThemeSync } from '@/hooks/useTheme';
+import { useGlobalKeymap } from '@/hooks/useGlobalKeymap';
 import { goHome, useRoute } from '@/lib/router';
 import { useAppStore } from '@/store/useAppStore';
+import { useUiStore } from '@/store/useUiStore';
 import { HomePage } from '@/features/home/HomePage';
 import { TodoView } from '@/features/todo/TodoView';
 import { KanbanView } from '@/features/kanban/KanbanView';
 
 export default function App() {
   useSystemThemeSync();
+  useGlobalKeymap();
   const route = useRoute();
+  const setHelpOpen = useUiStore((s) => s.setHelpOpen);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const board = useAppStore((s) =>
@@ -39,6 +47,15 @@ export default function App() {
           <Button
             variant="ghost"
             size="icon"
+            aria-label="Keyboard shortcuts"
+            title="Keyboard shortcuts (press ?)"
+            onClick={() => setHelpOpen(true)}
+          >
+            <Keyboard className="size-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             aria-label="Settings"
             onClick={() => setSettingsOpen(true)}
           >
@@ -58,6 +75,10 @@ export default function App() {
       </main>
 
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <CommandPalette />
+      <HelpDialog />
+      <HintOverlay />
+      <KeyboardStatus />
       <Toaster richColors position="bottom-right" />
     </div>
   );

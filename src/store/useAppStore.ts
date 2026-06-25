@@ -54,6 +54,7 @@ interface Actions {
   archiveBoard: (boardId: string) => void;
   unarchiveBoard: (boardId: string) => void;
   setShowCompleted: (boardId: string, value: boolean) => void;
+  reorderBoard: (activeBoardId: string, overBoardId: string) => void;
   // columns (kanban)
   setColumns: (boardId: string, columns: Column[]) => void;
   archiveDone: (boardId: string) => void;
@@ -79,6 +80,14 @@ interface Actions {
   clearBoard: (boardId: string) => void;
   clearAll: () => void;
   importBoards: (payload: TransferPayload, mode: ImportMode) => number;
+  // keyboard move-mode revert (restore a snapshotted order)
+  restoreTaskOrder: (
+    boardId: string,
+    taskIds: string[],
+    taskId?: string,
+    columnId?: ColumnId | null,
+  ) => void;
+  restoreBoardOrder: (order: string[]) => void;
 }
 
 export type AppState = DataState & Actions;
@@ -164,6 +173,15 @@ export const useAppStore = create<AppState>()(
         set((s) => {
           const b = s.boards[boardId];
           if (b) b.showCompleted = value;
+        }),
+
+      reorderBoard: (activeBoardId, overBoardId) =>
+        set((s) => {
+          const from = s.boardOrder.indexOf(activeBoardId);
+          const to = s.boardOrder.indexOf(overBoardId);
+          if (from < 0 || to < 0 || from === to) return;
+          s.boardOrder.splice(from, 1);
+          s.boardOrder.splice(to, 0, activeBoardId);
         }),
 
       setColumns: (boardId, columns) =>
@@ -355,6 +373,24 @@ export const useAppStore = create<AppState>()(
         });
         return boards.length;
       },
+
+      restoreTaskOrder: (boardId, taskIds, taskId, columnId) =>
+        set((s) => {
+          const b = s.boards[boardId];
+          if (!b) return;
+          // Keep only ids that still exist (defensive against deletes mid-move).
+          b.taskIds = taskIds.filter((id) => s.tasks[id]) as TaskId[];
+          if (taskId && columnId !== undefined) {
+            const tk = s.tasks[taskId];
+            if (tk) tk.columnId = columnId;
+          }
+          b.updatedAt = now();
+        }),
+
+      restoreBoardOrder: (order) =>
+        set((s) => {
+          s.boardOrder = order.filter((id) => s.boards[id]);
+        }),
     })),
     {
       name: STORAGE_KEYS.app,

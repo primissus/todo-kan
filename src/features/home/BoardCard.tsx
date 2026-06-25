@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Archive,
   ArchiveRestore,
@@ -8,6 +8,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { useIsMoveTarget, useIsSelected } from '@/hooks/useSelection';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +34,15 @@ export function BoardCard({ board, archived = false }: BoardCardProps) {
   const unarchiveBoard = useAppStore((s) => s.unarchiveBoard);
   const deleteBoard = useAppStore((s) => s.deleteBoard);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const selected = useIsSelected(board.id);
+  const moveTarget = useIsMoveTarget(board.id);
+
+  const nodeRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (selected || moveTarget) {
+      nodeRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  }, [selected, moveTarget]);
 
   const active = tasks.filter((t) => !t.archived);
   const done =
@@ -45,7 +56,15 @@ export function BoardCard({ board, archived = false }: BoardCardProps) {
   const Icon = board.type === 'kanban' ? Columns3 : ListTodo;
 
   return (
-    <div className="group relative flex flex-col rounded-lg border bg-card p-4 text-card-foreground shadow-xs transition-colors hover:border-ring/50">
+    <div
+      ref={nodeRef}
+      className={cn(
+        'group relative flex scroll-mt-20 flex-col rounded-lg border bg-card p-4 text-card-foreground shadow-xs transition-colors hover:border-ring/50',
+        selected && 'ring-2 ring-ring ring-offset-2 ring-offset-background',
+        moveTarget &&
+          'ring-2 ring-primary ring-offset-2 ring-offset-background shadow-lg',
+      )}
+    >
       <button
         type="button"
         onClick={() => goBoard(board.id)}

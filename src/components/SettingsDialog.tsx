@@ -14,6 +14,7 @@ import { ThemeControls } from '@/components/ThemeControls';
 import { ExportDialog } from '@/components/ExportDialog';
 import { ImportDialog } from '@/components/ImportDialog';
 import { TypeToConfirmModal } from '@/components/TypeToConfirmModal';
+import { APP_VERSION } from '@/lib/version';
 import { useAppStore } from '@/store/useAppStore';
 
 export interface SettingsDialogProps {
@@ -74,6 +75,12 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
               Clear all data
             </Button>
           </div>
+
+          <Separator />
+
+          <p className="text-center text-xs text-muted-foreground">
+            todo<span className="text-primary">·</span>kan · v{APP_VERSION}
+          </p>
         </DialogContent>
       </Dialog>
 

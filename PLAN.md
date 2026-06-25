@@ -46,8 +46,9 @@ column derives from that single array. `archived` is orthogonal to
 
 ## Theming (ported from vegapunk → shadcn tokens)
 
-- `src/lib/theme.ts` — `THEME_FAMILIES` (default, gruvbox, nord), `MODES`
-  (light/dark/system), `applyTheme` sets `data-theme` + `data-mode` on `<html>`.
+- `src/lib/theme.ts` — `THEME_FAMILIES` (default, gruvbox, solarized, catppuccin,
+  nord, github), `MODES` (light/dark/system), `applyTheme` sets `data-theme` +
+  `data-mode` on `<html>`. Gruvbox light uses the "soft" background, matching vegapunk.
 - `src/styles/theme.css` — `[data-theme="<family>-<light|dark>"]` blocks set
   shadcn's semantic tokens (oklch). `src/styles/globals.css` maps them via
   `@theme inline` and keys `dark:` off `[data-mode="dark"]`.
@@ -65,6 +66,39 @@ column derives from that single array. `archived` is orthogonal to
 
 Tiny hash router (`src/lib/router.ts`): `#/` = home, `#/board/<id>` = board.
 Deep links + back/forward that survive `file://`; no `react-router`.
+
+## Keyboard navigation
+
+Vim-style control layered on without disturbing the domain model:
+
+- **Two stores.** `useAppStore` stays the persisted domain model. A second,
+  **non-persisted** `src/store/useUiStore.ts` holds ephemeral nav state — the
+  selection cursor, move-mode + an order snapshot for revert, and overlay/modal
+  flags. This keeps cursor moves out of the persisted blob and lets cards
+  subscribe to a primitive "am I selected?" (`src/hooks/useSelection.ts`) so a
+  cursor move re-renders only the two affected cards.
+- **One listener.** `src/hooks/useGlobalKeymap.ts` registers a single `window`
+  `keydown` handler (mounted once in `App`), reading state via `getState()` and
+  the route via a ref so it never re-registers. It owns the should-handle guard
+  (skip while typing / while a dialog is open / for unregistered modifier combos;
+  don't hijack Enter/Space on a focused control), cursor math, and move-mode.
+  Selection never moves DOM focus, so it can't conflict with dnd-kit's keyboard
+  sensor.
+- **Reuses store primitives.** Move-mode relocates via `moveTaskToColumn` /
+  `reorderTaskInBoard` / the new `reorderBoard`; Esc-revert restores the snapshot
+  via `restoreTaskOrder` / `restoreBoardOrder`.
+- **Overlays** (all statically imported — single-file safe): `CommandPalette`
+  (`/` ⌘K Ctrl+K, reuses `lib/search`), `HelpDialog` (`?`, rendered from the
+  declarative `src/lib/keymap.ts`), `HintOverlay` (`f`, Vimium hints from the pure
+  `src/lib/hints.ts`, a `z-[100]` portal above the `z-50` dialogs).
+
+## App version
+
+`src/lib/version.ts` exposes `APP_VERSION` from the compile-time constant
+`__APP_VERSION__`, injected via `define` in **both** `vite.config.ts` and
+`vitest.config.ts` (read from `package.json`). Compile-time so the single-file
+build inlines a literal — no runtime fetch/import of `package.json`. Shown in the
+Settings footer.
 
 ## Verification
 

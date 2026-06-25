@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   ArchiveRestore,
   ChevronDown,
@@ -19,14 +18,19 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { filterBySearch } from '@/lib/search';
 import { goBoard } from '@/lib/router';
 import { useAppStore } from '@/store/useAppStore';
+import { useUiStore } from '@/store/useUiStore';
 import { useOrderedBoards } from '@/store/selectors';
 import type { BoardType } from '@/lib/types/domain';
 
 export function HomePage() {
   const boards = useOrderedBoards();
   const createBoard = useAppStore((s) => s.createBoard);
-  const [query, setQuery] = useState('');
-  const [showArchived, setShowArchived] = useState(false);
+  // Search + "show archived" live in useUiStore so the keyboard cursor (and the
+  // Shift+A shortcut) navigate/toggle the same state the grid shows.
+  const query = useUiStore((s) => s.homeQuery);
+  const setQuery = useUiStore((s) => s.setHomeQuery);
+  const showArchived = useUiStore((s) => s.homeShowArchived);
+  const toggleShowArchived = useUiStore((s) => s.toggleHomeShowArchived);
   const debounced = useDebouncedValue(query, 150);
 
   const active = filterBySearch(
@@ -90,7 +94,7 @@ export function HomePage() {
             variant="ghost"
             size="sm"
             className="text-muted-foreground"
-            onClick={() => setShowArchived((v) => !v)}
+            onClick={() => toggleShowArchived()}
           >
             <ArchiveRestore className="size-4" />
             {showArchived ? 'Hide' : 'Show'} archived (

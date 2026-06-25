@@ -22,6 +22,7 @@ import { TaskFormDialog } from '@/features/TaskFormDialog';
 import { ArchivedTasksDrawer } from '@/features/ArchivedTasksDrawer';
 import { TypeToConfirmModal } from '@/components/TypeToConfirmModal';
 import { useAppStore } from '@/store/useAppStore';
+import { useUiStore } from '@/store/useUiStore';
 import { useBoard, useBoardTasks, useAllTags } from '@/store/selectors';
 
 export interface TodoViewProps {
@@ -39,10 +40,15 @@ export function TodoView({ boardId }: TodoViewProps) {
   const reorderTaskInBoard = useAppStore((s) => s.reorderTaskInBoard);
   const clearBoard = useAppStore((s) => s.clearBoard);
 
-  const [newOpen, setNewOpen] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
+  // Modal flags live in useUiStore so the global keymap can open them directly.
+  const newOpen = useUiStore((s) => s.newOpen);
+  const setNewOpen = useUiStore((s) => s.setNewOpen);
+  const editId = useUiStore((s) => s.editId);
+  const setEditId = useUiStore((s) => s.setEditId);
+  const archivedOpen = useUiStore((s) => s.archivedOpen);
+  const setArchivedOpen = useUiStore((s) => s.setArchivedOpen);
+
   const [clearOpen, setClearOpen] = useState(false);
-  const [archivedOpen, setArchivedOpen] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
