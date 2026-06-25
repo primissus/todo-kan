@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%236366f1'/%3E%3Crect x='6' y='7' width='9' height='18' rx='2' fill='white'/%3E%3Crect x='17' y='7' width='9' height='11' rx='2' fill='white' opacity='0.7'/%3E%3C/svg%3E" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <title>todo-kan</title>
+    <!--
+      FOUC-prevention: resolve the active theme synchronously from localStorage
+      BEFORE any bundle (incl. Zustand hydration) runs, then stamp data-theme +
+      data-mode on <html>. Ported from vegapunk/docs-web-app/index.html.
+      Keep keys 'theme-mode' / 'theme-family' in sync with src/lib/theme.ts.
+    -->
+    <script>
+      (function () {
+        try {
+          var M = 'system', F = 'default', d = document.documentElement, S = localStorage;
+          M = S.getItem('theme-mode') || M;
+          F = S.getItem('theme-family') || F;
+          var o = matchMedia('(prefers-color-scheme: dark)'), c;
+          if (M === 'light') c = F + '-light';
+          else if (M === 'dark') c = F + '-dark';
+          else c = F + (o.matches ? '-dark' : '-light');
+          var dark = c.slice(-5) === '-dark';
+          d.dataset.theme = c;
+          d.dataset.mode = dark ? 'dark' : 'light';
+        } catch (e) {
+          var el = document.documentElement;
+          el.dataset.theme = 'default-light';
+          el.dataset.mode = 'light';
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
