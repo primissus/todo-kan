@@ -1,0 +1,464 @@
+// The single global keyboard handler. Mounted once in App. It owns:
+//   - the should-handle guard (ignore keys while typing or while a dialog owns them),
+//   - cursor movement (j/k/h/l + arrows) over the current view's items,
+//   - actions (Enter / a / Shift+A / Shift+C / Shift+N / m / / · ⌘K · f · ?),
+//   - move-mode relocation (live, via existing store actions) + Esc revert.
+//
+// State reads go through getState() (not hooks) so the listener registers once and
+// always sees fresh data; only the route is tracked via a ref. The HelpDialog
+// reflects these bindings from lib/keymap.ts — keep the two in sync.
+
+import { useEffect, useRef } from 'react';
+import { goBoard, useRoute, type Route } from '@/lib/router';
+import { filterBySearch } from '@/lib/search';
+import { useAppStore } from '@/store/useAppStore';
+import { useUiStore, type UiState } from '@/store/useUiStore';
+import type { Board, ColumnId, Task } from '@/lib/types/domain';
+
+type Dir = 'up' | 'down' | 'left' | 'right';
+type Ctx = 'home' | 'kanban' | 'todo';
+
+type TaskMap = Record<string, Task>;
+
+function dirFromKey(key: string): Dir | null {
+  // Lower-case single chars so CapsLock ('J') still navigates; arrow keys
+  // ('ArrowDown', …) are multi-char and pass through unchanged.
+  const k = key.length === 1 ? key.toLowerCase() : key;
+  switch (k) {
+    case 'j':
+    case 'ArrowDown':
+      return 'down';
+    case 'k':
+    case 'ArrowUp':
+      return 'up';
+    case 'h':
+    case 'ArrowLeft':
+      return 'left';
+    case 'l':
+    case 'ArrowRight':
+      return 'right';
+    default:
+      return null;
+  }
+}
+
+function contextFor(route: Route): Ctx {
+  if (route.name === 'home') return 'home';
+  const b = useAppStore.getState().boards[route.id];
+  return b?.type === 'kanban' ? 'kanban' : 'todo';
+}
+
+/** Sorted columns, each with its visible (non-archived) task ids in board order. */
+function kanbanColumns(
+  board: Board,
+  tasks: TaskMap,
+): { id: ColumnId; ids: string[] }[] {
+  const cols = board.columns.slice().sort((a, b) => a.order - b.order);
+  return cols.map((c) => ({
+    id: c.id,
+    ids: board.taskIds.filter((tid) => {
+      const t = tasks[tid];
+      return !!t && !t.archived && t.columnId === c.id;
+    }),
+  }));
+}
+
+/** Visible todo rows in order (non-archived, respecting showCompleted). */
+function todoVisibleIds(board: Board, tasks: TaskMap): string[] {
+  return board.taskIds.filter((tid) => {
+    const t = tasks[tid];
+    if (!t || t.archived) return false;
+    return board.showCompleted ? true : !t.completed;
+  });
+}
+
+/**
+ * Boards the Home cursor can land on: active (non-archived) boards in order,
+ * filtered by the same search query the grid shows — so the cursor never selects
+ * a board that's been filtered off-screen.
+ */
+function activeBoardIds(): string[] {
+  const s = useAppStore.getState();
+  const active = s.boardOrder
+    .map((id) => s.boards[id])
+    .filter((b): b is Board => !!b && !b.archived);
+  const query = useUiStore.getState().homeQuery;
+  return filterBySearch(active, query).map((b) => b.id);
+}
+
+/** After removing `id`, which sibling should the cursor land on? */
+function neighborAfterRemoval(list: string[], id: string): string | null {
+  const i = list.indexOf(id);
+  if (i < 0) return null;
+  return list[i + 1] ?? list[i - 1] ?? null;
+}
+
+// ---- cursor movement ------------------------------------------------------
+
+function selectLinear(
+  list: string[],
+  sel: string | null,
+  dir: Dir,
+  ui: UiState,
+): void {
+  if (list.length === 0) return;
+  const i = sel ? list.indexOf(sel) : -1;
+  if (i < 0) {
+    ui.setSelected(list[0]);
+    return;
+  }
+  const delta = dir === 'down' || dir === 'right' ? 1 : -1;
+  const ni = i + delta;
+  if (ni >= 0 && ni < list.length) ui.setSelected(list[ni]);
+}
+
+function selectKanban(
+  cols: { id: ColumnId; ids: string[] }[],
+  sel: string | null,
+  dir: Dir,
+  ui: UiState,
+): void {
+  let ci = -1;
+  let ri = -1;
+  for (let i = 0; i < cols.length; i++) {
+    const j = sel ? cols[i].ids.indexOf(sel) : -1;
+    if (j >= 0) {
+      ci = i;
+      ri = j;
+      break;
+    }
+  }
+  if (ci < 0) {
+    for (const c of cols) {
+      if (c.ids.length) {
+        ui.setSelected(c.ids[0]);
+        return;
+      }
+    }
+    return;
+  }
+  if (dir === 'down') {
+    const ids = cols[ci].ids;
+    if (ri + 1 < ids.length) ui.setSelected(ids[ri + 1]);
+    return;
+  }
+  if (dir === 'up') {
+    if (ri - 1 >= 0) ui.setSelected(cols[ci].ids[ri - 1]);
+    return;
+  }
+  const step = dir === 'left' ? -1 : 1;
+  for (let i = ci + step; i >= 0 && i < cols.length; i += step) {
+    if (cols[i].ids.length) {
+      ui.setSelected(cols[i].ids[Math.min(ri, cols[i].ids.length - 1)]);
+      return;
+    }
+  }
+}
+
+function moveCursor(ctx: Ctx, route: Route, dir: Dir): void {
+  const app = useAppStore.getState();
+  const ui = useUiStore.getState();
+  const sel = ui.selectedId;
+  if (ctx === 'home') {
+    selectLinear(activeBoardIds(), sel, dir, ui);
+    return;
+  }
+  if (route.name !== 'board') return;
+  const board = app.boards[route.id];
+  if (!board) return;
+  if (ctx === 'todo') selectLinear(todoVisibleIds(board, app.tasks), sel, dir, ui);
+  else selectKanban(kanbanColumns(board, app.tasks), sel, dir, ui);
+}
+
+// ---- actions --------------------------------------------------------------
+
+function archiveSelected(ctx: Ctx, route: Route, id: string): void {
+  const app = useAppStore.getState();
+  const ui = useUiStore.getState();
+  if (ctx === 'home') {
+    const next = neighborAfterRemoval(activeBoardIds(), id);
+    app.archiveBoard(id);
+    ui.setSelected(next);
+    return;
+  }
+  if (route.name !== 'board') return;
+  const board = app.boards[route.id];
+  if (!board) return;
+  const list =
+    ctx === 'kanban'
+      ? kanbanColumns(board, app.tasks).find((c) => c.ids.includes(id))?.ids ?? []
+      : todoVisibleIds(board, app.tasks);
+  const next = neighborAfterRemoval(list, id);
+  app.archiveTask(id);
+  ui.setSelected(next);
+}
+
+function beginMove(ctx: Ctx, route: Route, id: string): void {
+  const app = useAppStore.getState();
+  const ui = useUiStore.getState();
+  if (ctx === 'home') {
+    ui.beginMove({
+      kind: 'board',
+      id,
+      boardId: null,
+      originColumnId: null,
+      originOrder: app.boardOrder.slice(),
+    });
+    return;
+  }
+  if (route.name !== 'board') return;
+  const board = app.boards[route.id];
+  const task = app.tasks[id];
+  if (!board || !task) return;
+  ui.beginMove({
+    kind: 'task',
+    id,
+    boardId: route.id,
+    originColumnId: task.columnId,
+    originOrder: board.taskIds.slice(),
+  });
+}
+
+// ---- move-mode relocation -------------------------------------------------
+
+function relocateBoard(id: string, dir: Dir): void {
+  const app = useAppStore.getState();
+  const list = activeBoardIds();
+  const i = list.indexOf(id);
+  if (i < 0) return;
+  const delta = dir === 'down' || dir === 'right' ? 1 : -1;
+  const ni = i + delta;
+  if (ni >= 0 && ni < list.length) app.reorderBoard(id, list[ni]);
+}
+
+function relocateTodo(boardId: string, id: string, dir: Dir): void {
+  if (dir === 'left' || dir === 'right') return;
+  const app = useAppStore.getState();
+  const board = app.boards[boardId];
+  if (!board) return;
+  const list = todoVisibleIds(board, app.tasks);
+  const i = list.indexOf(id);
+  if (i < 0) return;
+  if (dir === 'down' && i + 1 < list.length)
+    app.reorderTaskInBoard(boardId, id, list[i + 1]);
+  if (dir === 'up' && i - 1 >= 0)
+    app.reorderTaskInBoard(boardId, id, list[i - 1]);
+}
+
+function relocateKanban(boardId: string, id: string, dir: Dir): void {
+  const app = useAppStore.getState();
+  const board = app.boards[boardId];
+  if (!board) return;
+  const cols = kanbanColumns(board, app.tasks);
+  const ci = cols.findIndex((c) => c.ids.includes(id));
+  if (ci < 0) return;
+  const ids = cols[ci].ids;
+  const ri = ids.indexOf(id);
+  if (dir === 'down') {
+    if (ri + 1 < ids.length) app.moveTaskToColumn(id, cols[ci].id, ids[ri + 2] ?? null);
+  } else if (dir === 'up') {
+    if (ri - 1 >= 0) app.moveTaskToColumn(id, cols[ci].id, ids[ri - 1]);
+  } else {
+    const ti = ci + (dir === 'left' ? -1 : 1);
+    if (ti >= 0 && ti < cols.length) {
+      app.moveTaskToColumn(id, cols[ti].id, cols[ti].ids[ri] ?? null);
+    }
+  }
+}
+
+function cancelMove(): void {
+  const ui = useUiStore.getState();
+  const app = useAppStore.getState();
+  const snap = ui.moveSnapshot;
+  if (snap) {
+    if (snap.kind === 'board') app.restoreBoardOrder(snap.originOrder);
+    else if (snap.boardId)
+      app.restoreTaskOrder(
+        snap.boardId,
+        snap.originOrder,
+        snap.id,
+        snap.originColumnId,
+      );
+  }
+  ui.endMove();
+}
+
+function handleMoveMode(e: KeyboardEvent, route: Route): void {
+  const ui = useUiStore.getState();
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    ui.endMove();
+    return;
+  }
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    cancelMove();
+    return;
+  }
+  const dir = dirFromKey(e.key);
+  if (!dir) return;
+  e.preventDefault();
+  const snap = ui.moveSnapshot;
+  if (!snap) return;
+  if (snap.kind === 'board') {
+    relocateBoard(snap.id, dir);
+    return;
+  }
+  if (route.name !== 'board') return;
+  if (contextFor(route) === 'kanban') relocateKanban(route.id, snap.id, dir);
+  else relocateTodo(route.id, snap.id, dir);
+}
+
+// ---- guard + dispatch -----------------------------------------------------
+
+function shouldHandle(e: KeyboardEvent, ui: UiState): boolean {
+  const ae = document.activeElement as HTMLElement | null;
+  const tag = ae?.tagName;
+  if (
+    tag === 'INPUT' ||
+    tag === 'TEXTAREA' ||
+    tag === 'SELECT' ||
+    ae?.isContentEditable
+  ) {
+    return false;
+  }
+  // Drive this off the ACTUALLY-rendered dialog, not the ui flags: a stale flag
+  // (e.g. editId left set after navigating away) must never wedge the keymap.
+  // Every overlay we own (palette/help/new/edit/archived/columns) and the shared
+  // dialogs (Settings/Confirm/TypeToConfirm/Export/Import) render a Radix dialog
+  // with [data-state="open"] while visible.
+  if (document.querySelector('[data-slot="dialog-content"][data-state="open"]')) {
+    return false;
+  }
+  // Only ⌘/Ctrl+K is a registered combo; leave every other modified key alone.
+  if (e.metaKey || e.ctrlKey || e.altKey) {
+    return !e.altKey && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k';
+  }
+  // Let Enter/Space activate a focused button/link natively — but ONLY when there
+  // is no keyboard selection. Otherwise "select a card, press Enter" would be
+  // swallowed whenever a button still holds focus (common after a click / dialog
+  // close, since selection never moves DOM focus).
+  if (
+    !ui.selectedId &&
+    ae &&
+    typeof ae.matches === 'function' &&
+    ae.matches('button, [role="button"], a[href], summary')
+  ) {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') return false;
+  }
+  return true;
+}
+
+function handleKey(e: KeyboardEvent, route: Route): void {
+  const ui = useUiStore.getState();
+
+  if (ui.moveMode) {
+    handleMoveMode(e, route);
+    return;
+  }
+  // HintOverlay installs its own capture-phase listener; don't double-handle.
+  if (ui.hintsActive) return;
+  if (!shouldHandle(e, ui)) return;
+
+  const ctx = contextFor(route);
+  const key = e.key;
+  const lower = key.toLowerCase();
+  const mod = e.metaKey || e.ctrlKey;
+
+  // Global overlays
+  if (key === '/' || (mod && lower === 'k')) {
+    e.preventDefault();
+    ui.setPaletteOpen(true);
+    return;
+  }
+  if (key === '?') {
+    e.preventDefault();
+    ui.setHelpOpen(true);
+    return;
+  }
+  if (lower === 'f' && !e.shiftKey) {
+    e.preventDefault();
+    ui.setHintsActive(true);
+    return;
+  }
+  if (key === 'Escape') {
+    if (ui.selectedId) {
+      e.preventDefault();
+      ui.setSelected(null);
+    }
+    return;
+  }
+
+  // Shift combos
+  if (lower === 'n' && e.shiftKey) {
+    e.preventDefault();
+    if (ctx === 'home') goBoard(useAppStore.getState().createBoard('todo'));
+    else ui.setNewOpen(true);
+    return;
+  }
+  if (lower === 'a' && e.shiftKey) {
+    e.preventDefault();
+    if (ctx === 'home') ui.toggleHomeShowArchived();
+    else ui.setArchivedOpen(!ui.archivedOpen);
+    return;
+  }
+  if (lower === 'c' && e.shiftKey) {
+    if (ctx === 'kanban') {
+      e.preventDefault();
+      ui.setKanbanColumnsOpen(true);
+    }
+    return;
+  }
+  // No other shift combo is bound — don't hijack the browser's.
+  if (e.shiftKey) return;
+
+  // Selection-scoped actions
+  if (lower === 'a') {
+    if (!ui.selectedId) return;
+    e.preventDefault();
+    archiveSelected(ctx, route, ui.selectedId);
+    return;
+  }
+  if (lower === 'm') {
+    if (!ui.selectedId) return;
+    e.preventDefault();
+    beginMove(ctx, route, ui.selectedId);
+    return;
+  }
+  if (key === 'Enter') {
+    if (!ui.selectedId) return;
+    e.preventDefault();
+    if (ctx === 'home') goBoard(ui.selectedId);
+    else ui.setEditId(ui.selectedId);
+    return;
+  }
+
+  const dir = dirFromKey(key);
+  if (dir) {
+    e.preventDefault();
+    moveCursor(ctx, route, dir);
+  }
+}
+
+export function useGlobalKeymap(): void {
+  const route = useRoute();
+  const routeRef = useRef<Route>(route);
+  routeRef.current = route;
+
+  // The cursor + any open modal are per-view: reset them when navigating between
+  // boards / home, so a stale editId/newOpen/etc. can't re-open or wedge keys
+  // after a browser Back/Forward.
+  const routeKey = route.name === 'board' ? `board:${route.id}` : 'home';
+  useEffect(() => {
+    const ui = useUiStore.getState();
+    ui.setSelected(null);
+    if (ui.moveMode) ui.endMove();
+    ui.resetModals();
+  }, [routeKey]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => handleKey(e, routeRef.current);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+}

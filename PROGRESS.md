@@ -37,3 +37,36 @@ All requirements in [REQUIREMENTS.md](./REQUIREMENTS.md) are implemented.
   design; archived boards are the global view on Home).
 - Bundle is a single ~620 KB JS chunk by design (single-file build needs one
   chunk; no code-splitting / `React.lazy`).
+
+## 2026-06-25 — Theming, layout, keyboard navigation
+
+### Done
+- Theme families expanded to match vegapunk: **default · gruvbox · solarized ·
+  catppuccin · nord · github** (× light/dark), Gruvbox light = "soft" background.
+  Palettes converted from vegapunk hex → shadcn oklch tokens.
+- TaskFormDialog: real `<form>` so **Enter** saves from single-line inputs (title,
+  empty chips); description keeps Enter for newlines (⌘/Ctrl+Enter submits).
+- Kanban columns layout: full-bleed centered scroller, columns
+  `clamp(288px, 22vw, 500px)`, vertical stacking on mobile, `20vw` scroll padding.
+- **Vim-style keyboard navigation** (REQUIREMENTS §12): selection cursor
+  (j/k/h/l + arrows), move-mode (`m` → relocate, Enter/Esc), `Enter` open/edit,
+  `a` archive, Shift+A archived, Shift+C columns, Shift+N new, `/`·⌘K·Ctrl+K
+  search palette, `f` Vimium hints, `?` help dialog + header button.
+  New: `store/useUiStore.ts` (non-persisted), `hooks/useGlobalKeymap.ts`,
+  `hooks/useSelection.ts`, `lib/keymap.ts`, `lib/hints.ts`,
+  `components/{CommandPalette,HelpDialog,HintOverlay}.tsx`; store gained
+  `reorderBoard` + `restoreTaskOrder`/`restoreBoardOrder`.
+- Settings footer shows the app **version** (`__APP_VERSION__` injected from
+  `package.json` at build, `lib/version.ts`). `package.json` at `0.1.0`.
+
+### Verification
+- `pnpm typecheck` — clean. `pnpm lint` — 0 errors (3 stock shadcn warnings).
+- `pnpm test` — **52/52** pass (added `keymap.test.tsx`, `hints.test.ts`,
+  `uiStore.test.ts`).
+- `pnpm build` + `pnpm build:single` — both succeed; version literal inlined.
+- Multi-agent adversarial review of the keyboard feature → 20 confirmed findings
+  fixed: stale-modal-flag keymap deadlock (guard now keys off the rendered dialog
+  + reset on route change), Enter-with-focused-button, CapsLock nav, palette
+  scroll-into-view + listbox roles + hidden-completed filtering, home cursor
+  honoring the search filter, move-mode banner + sr-only announcements, and the
+  test-coverage gaps above.

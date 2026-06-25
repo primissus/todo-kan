@@ -41,22 +41,28 @@ src/
     search.ts                    # Fuse.js + "#tag" parsing
     transfer.ts                  # export/import (+ id re-keying)
     router.ts                    # tiny hash router
+    keymap.ts                    # declarative shortcut table (drives the Help dialog)
+    hints.ts                     # pure f-hint helpers (generateLabels / collectHintTargets)
+    version.ts                   # APP_VERSION (build-time __APP_VERSION__ define)
   store/
-    useAppStore.ts               # Zustand store + ALL actions (persist + immer)
+    useAppStore.ts               # persisted Zustand store + ALL domain actions (persist + immer)
+    useUiStore.ts                # NON-persisted ephemeral store (selection/move/overlay/modal flags)
     selectors.ts                 # useOrderedBoards / useBoard / useBoardTasks / useAllTags
-  hooks/                         # useTheme, useDebouncedValue
+  hooks/                         # useTheme, useDebouncedValue, useGlobalKeymap, useSelection
   components/
     ui/                          # shadcn primitives (CLI-generated) — avoid hand-editing
     AppHeader is inline in App.tsx; SearchBar, SettingsDialog, ThemeControls,
     ConfirmModal, TypeToConfirmModal, TagInput (Floating UI), Tooltip (Floating UI),
-    ExportDialog, ImportDialog
+    ExportDialog, ImportDialog,
+    CommandPalette (search), HelpDialog (? cheat sheet), HintOverlay (f hints),
+    KeyboardStatus (move-mode banner + sr-only selection announcements)
   features/
     BoardHeader.tsx, TaskFormDialog.tsx, ArchivedTasksDrawer.tsx   # shared by both views
     home/    HomePage, BoardCard
     todo/    TodoView, TaskRow
     kanban/  KanbanView, Column, KanbanCard, ColumnsSettings
   styles/ globals.css, theme.css
-  test/   setup.ts, store.test.ts, render.test.tsx
+  test/   setup.ts, store.test.ts, render.test.tsx, keymap.test.tsx, hints.test.ts, uiStore.test.ts
 ```
 
 ## Architecture (read before touching state/UI)
@@ -73,6 +79,23 @@ src/
 - **`archived` is an orthogonal boolean** on each task — independent of
   `completed` (todo) and `columnId` (kanban). Never fold archived into a status
   enum (you'd lose the column to restore on unarchive).
+- **Two stores, on purpose.** `useAppStore` is the persisted domain model.
+  `useUiStore` is a separate, **non-persisted** store for ephemeral
+  keyboard-navigation state: the selection cursor (`selectedId`), move-mode
+  (`moveMode` + an order `moveSnapshot` for Esc-revert), and overlay/modal flags
+  (`paletteOpen`, `helpOpen`, `hintsActive`, `newOpen`, `editId`, `archivedOpen`,
+  `kanbanColumnsOpen`, `homeShowArchived`). Cursor moves must never dirty the
+  persisted blob. `useUiStore` is deliberately "dumb" (primitive setters);
+  `useUiStore` never imports `useAppStore` (no cycle).
+- **Keyboard navigation** is one global `keydown` listener in
+  `hooks/useGlobalKeymap.ts`, mounted once in `App`. It reads state via
+  `getState()` (not hooks) so it registers once and always sees fresh data; only
+  the route is tracked via a ref. All cursor math + move-mode relocation live in
+  that hook and reuse existing store actions (`moveTaskToColumn`,
+  `reorderTaskInBoard`, the new `reorderBoard`); revert uses `restoreTaskOrder` /
+  `restoreBoardOrder`. Cards subscribe to "am I selected?" through the primitive
+  selectors in `hooks/useSelection.ts` so a cursor move re-renders only the two
+  cards involved, not the list.
 
 ## Conventions
 
@@ -106,14 +129,34 @@ src/
    `onDragEnd` finalizes. The board-wide `taskIds` array (filtered per column) is
    the order — there are no per-column arrays.
 7. **"Done" column** is identified by `column.isDone`, not its title.
+8. **The global keymap guard** (`hooks/useGlobalKeymap.ts`) ignores keys while
+   focus is in an `input`/`textarea`/`select`/`contenteditable`, while any dialog
+   is **actually rendered** (`[data-slot="dialog-content"][data-state="open"]` —
+   NOT the `useUiStore` flags, so a stale flag can never wedge the keymap), and
+   for modifier combos other than ⌘/Ctrl+K. It won't hijack Enter/Space on a
+   focused button/link **unless there is a selection** (so "select card, press
+   Enter" still works after a click). The lifted modal flags + cursor are reset
+   on route change (`resetModals`). Selection **never moves DOM focus** — so it
+   can't fight dnd-kit's `KeyboardSensor`. Preserve these invariants when adding
+   shortcuts.
+9. **`keymap.ts` ↔ `useGlobalKeymap.ts` must stay in sync.** `keymap.ts` is only
+   the display table for the Help dialog; the actual dispatch is hand-written in
+   the hook. Add a binding to both.
+10. **App version is a build-time constant.** `__APP_VERSION__` is injected via
+    `define` in BOTH `vite.config.ts` and `vitest.config.ts` (read from
+    `package.json`); `src/lib/version.ts` re-exports it. If you add another
+    build/test entrypoint, define it there too or the literal is missing.
 
 ## Testing
 
-- `pnpm test` runs vitest (`vitest.config.ts`, jsdom, polyfills in
-  `src/test/setup.ts`). `store.test.ts` covers the data logic; `render.test.tsx`
-  mounts the real views.
+- `pnpm test` runs vitest (`vitest.config.ts`, jsdom, polyfills + `useUiStore`
+  reset in `src/test/setup.ts`). `store.test.ts` covers data logic;
+  `render.test.tsx` mounts the real views; `keymap.test.tsx` drives the global
+  shortcuts (`fireEvent.keyDown(window, …)`); `hints.test.ts` + `uiStore.test.ts`
+  cover the pure/ephemeral pieces.
 - After UI/logic changes, run `pnpm typecheck && pnpm lint && pnpm test`, then
-  `pnpm build` and `pnpm build:single`.
+  `pnpm build` and `pnpm build:single`. Note `tsc -b` type-checks the test files
+  too — a green `vitest` run is not enough on its own.
 
 ## Hard rules
 

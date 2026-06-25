@@ -12,7 +12,10 @@ export type Mode = 'light' | 'dark' | 'system';
 export const THEME_FAMILIES: [string, string][] = [
   ['default', 'Default'],
   ['gruvbox', 'Gruvbox'],
+  ['solarized', 'Solarized'],
+  ['catppuccin', 'Catppuccin'],
   ['nord', 'Nord'],
+  ['github', 'GitHub'],
 ];
 
 /** [modeKey, displayLabel] — order drives the Appearance control. */

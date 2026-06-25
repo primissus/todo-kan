@@ -1,9 +1,11 @@
+import { useEffect, useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Archive, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/useAppStore';
+import { useIsMoveTarget, useIsSelected } from '@/hooks/useSelection';
 import type { Task } from '@/lib/types/domain';
 
 export interface KanbanCardProps {
@@ -26,6 +28,19 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
     data: { type: 'card', columnId: task.columnId },
   });
   const archiveTask = useAppStore((s) => s.archiveTask);
+  const selected = useIsSelected(task.id);
+  const moveTarget = useIsMoveTarget(task.id);
+
+  const nodeRef = useRef<HTMLDivElement | null>(null);
+  const setRefs = (node: HTMLDivElement | null) => {
+    nodeRef.current = node;
+    setNodeRef(node);
+  };
+  useEffect(() => {
+    if (selected || moveTarget) {
+      nodeRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  }, [selected, moveTarget]);
 
   const style = overlay
     ? undefined
@@ -35,13 +50,17 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
 
   return (
     <div
-      ref={overlay ? undefined : setNodeRef}
+      ref={overlay ? undefined : setRefs}
       style={style}
       className={cn(
-        'group/card rounded-md border bg-card p-2.5 text-card-foreground shadow-xs',
+        'group/card scroll-mt-20 rounded-md border bg-card p-2.5 text-card-foreground shadow-xs',
         !overlay && 'cursor-grab active:cursor-grabbing',
         isDragging && 'opacity-40',
         overlay && 'rotate-1 cursor-grabbing shadow-lg',
+        selected &&
+          'ring-2 ring-ring ring-offset-2 ring-offset-background',
+        moveTarget &&
+          'ring-2 ring-primary ring-offset-2 ring-offset-background shadow-lg',
       )}
       {...(overlay ? {} : attributes)}
       {...(overlay ? {} : listeners)}

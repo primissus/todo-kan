@@ -1,4 +1,12 @@
 import '@testing-library/jest-dom/vitest';
+import { beforeEach } from 'vitest';
+import { initialUiState, useUiStore } from '@/store/useUiStore';
+
+// Reset ephemeral nav/UI state between tests so selection/move/overlay flags
+// never leak across cases.
+beforeEach(() => {
+  useUiStore.setState({ ...initialUiState });
+});
 
 // jsdom is missing a few APIs that Radix / Floating UI / dnd-kit touch.
 if (!window.matchMedia) {

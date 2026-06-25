@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Archive, GripVertical, Pencil } from 'lucide-react';
@@ -5,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/useAppStore';
+import { useIsMoveTarget, useIsSelected } from '@/hooks/useSelection';
 import type { Task } from '@/lib/types/domain';
 
 export interface TaskRowProps {
@@ -23,6 +25,19 @@ export function TaskRow({ task, onEdit }: TaskRowProps) {
   } = useSortable({ id: task.id });
   const toggleComplete = useAppStore((s) => s.toggleComplete);
   const archiveTask = useAppStore((s) => s.archiveTask);
+  const selected = useIsSelected(task.id);
+  const moveTarget = useIsMoveTarget(task.id);
+
+  const nodeRef = useRef<HTMLDivElement | null>(null);
+  const setRefs = (node: HTMLDivElement | null) => {
+    nodeRef.current = node;
+    setNodeRef(node);
+  };
+  useEffect(() => {
+    if (selected || moveTarget) {
+      nodeRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  }, [selected, moveTarget]);
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -31,11 +46,14 @@ export function TaskRow({ task, onEdit }: TaskRowProps) {
 
   return (
     <div
-      ref={setNodeRef}
+      ref={setRefs}
       style={style}
       className={cn(
-        'flex items-start gap-2 rounded-md border bg-card p-2.5',
+        'flex scroll-mt-20 items-start gap-2 rounded-md border bg-card p-2.5',
         isDragging && 'relative z-10 opacity-80 shadow-lg',
+        selected && 'ring-2 ring-ring ring-offset-2 ring-offset-background',
+        moveTarget &&
+          'ring-2 ring-primary ring-offset-2 ring-offset-background shadow-lg',
       )}
     >
       <button

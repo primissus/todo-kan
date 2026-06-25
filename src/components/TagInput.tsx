@@ -142,16 +142,15 @@ export function TagInput({
             onFocus: () => setOpen(true),
             onKeyDown(e) {
               if (e.key === 'Enter') {
-                e.preventDefault();
-                if (
-                  activeIndex !== null &&
-                  filtered[activeIndex] &&
-                  open
-                ) {
+                if (activeIndex !== null && filtered[activeIndex] && open) {
+                  e.preventDefault();
                   addTag(filtered[activeIndex]);
                 } else if (query.trim()) {
+                  e.preventDefault();
                   addTag(query);
                 }
+                // Empty input + no active suggestion: let Enter bubble so an
+                // enclosing <form> can submit (req: Enter saves from chips).
               } else if (e.key === ',') {
                 e.preventDefault();
                 if (query.trim()) addTag(query);
