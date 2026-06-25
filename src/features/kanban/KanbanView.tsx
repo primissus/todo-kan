@@ -21,8 +21,10 @@ import { TaskFormDialog } from '@/features/TaskFormDialog';
 import { ArchivedTasksDrawer } from '@/features/ArchivedTasksDrawer';
 import { ColumnsSettings } from '@/features/kanban/ColumnsSettings';
 import { TypeToConfirmModal } from '@/components/TypeToConfirmModal';
+import { ConfirmModal } from '@/components/ConfirmModal';
 import { useAppStore } from '@/store/useAppStore';
 import { useUiStore } from '@/store/useUiStore';
+import { deleteTaskWithCursor } from '@/hooks/useGlobalKeymap';
 import { useAllTags, useBoard, useBoardTasks } from '@/store/selectors';
 import type { ColumnId } from '@/lib/types/domain';
 
@@ -55,6 +57,8 @@ export function KanbanView({ boardId }: KanbanViewProps) {
   const setNewOpen = useUiStore((s) => s.setNewOpen);
   const editId = useUiStore((s) => s.editId);
   const setEditId = useUiStore((s) => s.setEditId);
+  const deleteId = useUiStore((s) => s.deleteId);
+  const setDeleteId = useUiStore((s) => s.setDeleteId);
   const archivedOpen = useUiStore((s) => s.archivedOpen);
   const setArchivedOpen = useUiStore((s) => s.setArchivedOpen);
   const columnsOpen = useUiStore((s) => s.kanbanColumnsOpen);
@@ -74,6 +78,9 @@ export function KanbanView({ boardId }: KanbanViewProps) {
   const active = tasks.filter((t) => !t.archived);
   const archivedCount = tasks.length - active.length;
   const editTaskObj = editId ? tasks.find((t) => t.id === editId) : undefined;
+  const deleteTaskObj = deleteId
+    ? tasks.find((t) => t.id === deleteId)
+    : undefined;
   const activeTask = activeId ? tasks.find((t) => t.id === activeId) : undefined;
 
   const handleDragStart = (e: DragStartEvent) =>
@@ -269,6 +276,23 @@ export function KanbanView({ boardId }: KanbanViewProps) {
         boardId={boardId}
         open={archivedOpen}
         onOpenChange={setArchivedOpen}
+      />
+
+      <ConfirmModal
+        open={!!deleteTaskObj}
+        onOpenChange={(o) => !o && setDeleteId(null)}
+        title="Delete this card?"
+        description={
+          deleteTaskObj
+            ? `"${deleteTaskObj.title || 'Untitled task'}" will be permanently deleted.`
+            : undefined
+        }
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => {
+          if (deleteId) deleteTaskWithCursor(boardId, 'kanban', deleteId);
+          setDeleteId(null);
+        }}
       />
 
       <TypeToConfirmModal

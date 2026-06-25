@@ -41,8 +41,10 @@ export interface TaskFormDialogProps {
 }
 
 /**
- * New / edit task form, shared by TODO and Kanban. Edits go through a confirm
- * modal (req 10.6 / 11.7); the Kanban variant shows a status dropdown (req 11.8).
+ * New / edit task form, shared by TODO and Kanban. Saving applies immediately
+ * (no confirm step); the Kanban variant shows a status dropdown (req 11.8).
+ * Closing a dirty form (Esc / outside-click / X / Cancel) asks to confirm the
+ * discard so typed-but-unsaved input isn't lost.
  */
 export function TaskFormDialog({
   open,
@@ -58,21 +60,33 @@ export function TaskFormDialog({
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [columnId, setColumnId] = useState<ColumnId | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+
+  const baseTitle = initial?.title ?? '';
+  const baseDescription = initial?.description ?? '';
+  const baseTags = initial?.tags ?? [];
+  const baseColumnId = initial?.columnId ?? columns?.[0]?.id ?? null;
 
   useEffect(() => {
     if (open) {
-      setTitle(initial?.title ?? '');
-      setDescription(initial?.description ?? '');
-      setTags(initial?.tags ?? []);
-      setColumnId(
-        initial?.columnId ?? columns?.[0]?.id ?? null,
-      );
+      setTitle(baseTitle);
+      setDescription(baseDescription);
+      setTags(baseTags);
+      setColumnId(baseColumnId);
+      setConfirmDiscard(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const valid = title.trim().length > 0;
+
+  // Dirty = the user has typed/changed something away from the opening values.
+  const dirty =
+    title.trim() !== baseTitle.trim() ||
+    description.trim() !== baseDescription.trim() ||
+    tags.length !== baseTags.length ||
+    tags.some((t, i) => t !== baseTags[i]) ||
+    (!!columns && columnId !== baseColumnId);
 
   const build = (): TaskFormValues => ({
     title: title.trim(),
@@ -83,117 +97,117 @@ export function TaskFormDialog({
 
   const submit = () => {
     if (!valid) return;
-    if (mode === 'edit') {
-      setConfirmOpen(true);
-    } else {
-      onSubmit(build());
-      onOpenChange(false);
-    }
+    onSubmit(build());
+    onOpenChange(false);
+  };
+
+  // Any close gesture (Esc / outside-click / X / Cancel) routes through here so
+  // a dirty form prompts before discarding; a clean one just closes.
+  const requestClose = () => {
+    if (dirty) setConfirmDiscard(true);
+    else onOpenChange(false);
   };
 
   return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{heading}</DialogTitle>
-          </DialogHeader>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) requestClose();
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{heading}</DialogTitle>
+        </DialogHeader>
 
-          {/*
-           * Real <form> so Enter natively submits from any single-line input
-           * (title, the empty chips input) — the description <Textarea> keeps
-           * Enter for newlines, with Cmd/Ctrl+Enter as a submit shortcut.
-           */}
-          <form
-            className="grid gap-4"
-            onSubmit={(e) => {
-              e.preventDefault();
-              submit();
-            }}
-          >
+        {/*
+         * Real <form> so Enter natively submits from any single-line input
+         * (title, the empty chips input) — the description <Textarea> keeps
+         * Enter for newlines, with Cmd/Ctrl+Enter as a submit shortcut.
+         */}
+        <form
+          className="grid gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+        >
+          <div className="grid gap-2">
+            <Label htmlFor="task-title">Title</Label>
+            <Input
+              id="task-title"
+              autoFocus
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="What needs doing?"
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="task-desc">Description</Label>
+            <Textarea
+              id="task-desc"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit();
+              }}
+              placeholder="Optional details…"
+              rows={3}
+            />
+          </div>
+
+          {columns ? (
             <div className="grid gap-2">
-              <Label htmlFor="task-title">Title</Label>
-              <Input
-                id="task-title"
-                autoFocus
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="What needs doing?"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="task-desc">Description</Label>
-              <Textarea
-                id="task-desc"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit();
-                }}
-                placeholder="Optional details…"
-                rows={3}
-              />
-            </div>
-
-            {columns ? (
-              <div className="grid gap-2">
-                <Label htmlFor="task-status">Status</Label>
-                <Select
-                  value={columnId ?? columns[0]?.id}
-                  onValueChange={(v) => setColumnId(v as ColumnId)}
-                >
-                  <SelectTrigger id="task-status" className="w-full">
-                    <SelectValue placeholder="Select a column" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {columns.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : null}
-
-            <div className="grid gap-2">
-              <Label>Labels</Label>
-              <TagInput
-                value={tags}
-                onChange={setTags}
-                suggestions={allTags}
-                placeholder="Add labels…"
-              />
-            </div>
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
+              <Label htmlFor="task-status">Status</Label>
+              <Select
+                value={columnId ?? columns[0]?.id}
+                onValueChange={(v) => setColumnId(v as ColumnId)}
               >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={!valid}>
-                {mode === 'edit' ? 'Save' : 'Add'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+                <SelectTrigger id="task-status" className="w-full">
+                  <SelectValue placeholder="Select a column" />
+                </SelectTrigger>
+                <SelectContent>
+                  {columns.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
+
+          <div className="grid gap-2">
+            <Label>Labels</Label>
+            <TagInput
+              value={tags}
+              onChange={setTags}
+              suggestions={allTags}
+              placeholder="Add labels…"
+            />
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={requestClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!valid}>
+              {mode === 'edit' ? 'Save' : 'Add'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
 
       <ConfirmModal
-        open={confirmOpen}
-        onOpenChange={setConfirmOpen}
-        title="Save changes?"
-        description="Update this task with your edits."
-        confirmLabel="Save"
-        onConfirm={() => {
-          onSubmit(build());
-          onOpenChange(false);
-        }}
+        open={confirmDiscard}
+        onOpenChange={setConfirmDiscard}
+        title="Discard changes?"
+        description="Your unsaved changes will be lost."
+        confirmLabel="Discard"
+        destructive
+        onConfirm={() => onOpenChange(false)}
       />
-    </>
+    </Dialog>
   );
 }

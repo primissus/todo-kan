@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '@/App';
 import { HintOverlay } from '@/components/HintOverlay';
@@ -8,7 +15,9 @@ import { initialUiState, useUiStore } from '@/store/useUiStore';
 
 beforeEach(() => {
   useAppStore.setState({ boards: {}, boardOrder: [], tasks: {} });
-  useUiStore.setState({ ...initialUiState });
+  // Most tests exercise the Vim motions, which are opt-in — enable them here and
+  // flip back to the off-by-default behaviour in the dedicated gating tests.
+  useUiStore.setState({ ...initialUiState, vimEnabled: true });
   localStorage.clear();
   window.location.hash = '';
 });
@@ -107,6 +116,20 @@ describe('global keymap — todo', () => {
     expect(useUiStore.getState().selectedId).toBe(a);
     fireEvent.keyDown(window, { key: 'a' });
     expect(useAppStore.getState().tasks[a].archived).toBe(true);
+    expect(useUiStore.getState().selectedId).toBe(b);
+  });
+
+  it('Shift+D confirms first, then deletes and advances the cursor', async () => {
+    const user = userEvent.setup();
+    const { a, b } = await renderTodo();
+    fireEvent.keyDown(window, { key: 'j' });
+    expect(useUiStore.getState().selectedId).toBe(a);
+    fireEvent.keyDown(window, { key: 'D', shiftKey: true });
+    // Pending confirmation — nothing deleted yet.
+    expect(useUiStore.getState().deleteId).toBe(a);
+    expect(useAppStore.getState().tasks[a]).toBeDefined();
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    expect(useAppStore.getState().tasks[a]).toBeUndefined();
     expect(useUiStore.getState().selectedId).toBe(b);
   });
 });
@@ -225,6 +248,125 @@ describe('global keymap — home', () => {
     expect(useUiStore.getState().homeShowArchived).toBe(false);
     fireEvent.keyDown(window, { key: 'A', shiftKey: true });
     expect(useUiStore.getState().homeShowArchived).toBe(true);
+  });
+});
+
+describe('global keymap — Vim toggle', () => {
+  it('with Vim off, letter motions are inert but arrows + Enter still work', async () => {
+    const { a } = await renderTodo();
+    act(() => useUiStore.setState({ vimEnabled: false }));
+
+    fireEvent.keyDown(window, { key: 'j' }); // letter motion → ignored
+    expect(useUiStore.getState().selectedId).toBeNull();
+
+    fireEvent.keyDown(window, { key: 'ArrowDown' }); // arrows still navigate
+    expect(useUiStore.getState().selectedId).toBe(a);
+
+    fireEvent.keyDown(window, { key: 'Enter' }); // Enter still opens
+    expect(useUiStore.getState().editId).toBe(a);
+  });
+
+  it(': opens the command line and `q` ↵ toggles Vim keys', async () => {
+    const user = userEvent.setup();
+    await renderTodo();
+    act(() => useUiStore.setState({ vimEnabled: false }));
+
+    fireEvent.keyDown(window, { key: ':' });
+    expect(useUiStore.getState().cmdline).toBe('');
+
+    const input = await screen.findByLabelText('Command line');
+    await user.type(input, 'q{Enter}');
+    expect(useUiStore.getState().vimEnabled).toBe(true);
+    expect(useUiStore.getState().cmdline).toBeNull();
+  });
+});
+
+describe('global keymap — Esc back-out', () => {
+  it('clears the cursor first, then leaves the board for Home', async () => {
+    await renderTodo();
+    fireEvent.keyDown(window, { key: 'j' });
+    expect(useUiStore.getState().selectedId).not.toBeNull();
+
+    fireEvent.keyDown(window, { key: 'Escape' }); // 1st Esc clears the cursor
+    expect(useUiStore.getState().selectedId).toBeNull();
+    expect(window.location.hash).toContain('/board/');
+
+    fireEvent.keyDown(window, { key: 'Escape' }); // 2nd Esc → Home
+    expect(window.location.hash).toBe('#/');
+  });
+});
+
+describe('TaskFormDialog — discard guard', () => {
+  it('Esc on a pristine form closes it without confirming', async () => {
+    const user = userEvent.setup();
+    await renderTodo();
+    fireEvent.keyDown(window, { key: 'N', shiftKey: true });
+    await screen.findByLabelText('Title');
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByLabelText('Title')).toBeNull());
+    expect(screen.queryByText('Discard changes?')).toBeNull();
+  });
+
+  it('Esc on a dirty form confirms; Discard closes without saving', async () => {
+    const user = userEvent.setup();
+    await renderTodo();
+    fireEvent.keyDown(window, { key: 'N', shiftKey: true });
+    const title = await screen.findByLabelText('Title');
+    await user.type(title, 'Draft');
+    await user.keyboard('{Escape}');
+
+    expect(await screen.findByText('Discard changes?')).toBeInTheDocument();
+    expect(screen.getByLabelText('Title')).toBeInTheDocument(); // still open
+
+    await user.click(screen.getByRole('button', { name: 'Discard' }));
+    await waitFor(() => expect(screen.queryByLabelText('Title')).toBeNull());
+    expect(
+      Object.values(useAppStore.getState().tasks).some(
+        (t) => t.title === 'Draft',
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('ArchivedTasksDrawer — keyboard', () => {
+  async function openDrawerWithTwoArchived() {
+    const id = useAppStore.getState().createBoard('todo');
+    const a = useAppStore.getState().addTask(id, { title: 'One' }) as string;
+    const b = useAppStore.getState().addTask(id, { title: 'Two' }) as string;
+    useAppStore.getState().archiveTask(a);
+    useAppStore.getState().archiveTask(b);
+    window.location.hash = `#/board/${id}`;
+    render(<App />);
+    fireEvent.keyDown(window, { key: 'A', shiftKey: true }); // open the drawer
+    const listbox = await screen.findByRole('listbox', {
+      name: 'Archived tasks',
+    });
+    return { a, b, listbox };
+  }
+
+  it('arrows move the highlight; Enter restores the highlighted task', async () => {
+    const { a, b, listbox } = await openDrawerWithTwoArchived();
+    // Order follows board order [a, b]; first row selected on open.
+    expect(within(listbox).getAllByRole('option')[0]).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    fireEvent.keyDown(listbox, { key: 'ArrowDown' });
+    expect(within(listbox).getAllByRole('option')[1]).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+
+    fireEvent.keyDown(listbox, { key: 'Enter' }); // restore the 2nd (Two = b)
+    expect(useAppStore.getState().tasks[b].archived).toBe(false);
+    expect(useAppStore.getState().tasks[a].archived).toBe(true);
+  });
+
+  it('Delete removes the highlighted archived task', async () => {
+    const { a, listbox } = await openDrawerWithTwoArchived();
+    fireEvent.keyDown(listbox, { key: 'Delete' }); // delete the 1st (One = a)
+    expect(useAppStore.getState().tasks[a]).toBeUndefined();
   });
 });
 

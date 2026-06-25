@@ -70,3 +70,31 @@ All requirements in [REQUIREMENTS.md](./REQUIREMENTS.md) are implemented.
   scroll-into-view + listbox roles + hidden-completed filtering, home cursor
   honoring the search filter, move-mode banner + sr-only announcements, and the
   test-coverage gaps above.
+
+## 2026-06-25 — Keyboard & modal UX pass
+
+### Done
+- **Vim keys are now opt-in** (`useUiStore.vimEnabled`, off by default, persisted
+  to `todokan:vim-enabled`). New bottom-left **command line**
+  (`components/CommandLine.tsx`): `:` opens it, `:q`↵ toggles Vim keys, with a
+  mode indicator. `useGlobalKeymap.handleKey` split into always-available (arrows,
+  Enter, Esc, ⌘K/Ctrl+K, `?`, `:`) vs Vim-gated (j/k/h/l, `m`, `a`, `f`, `/`,
+  Shift-combos).
+- **Shift+D** deletes the selected task behind a destructive **confirm** (`deleteId`
+  in `useUiStore`; exported `deleteTaskWithCursor` lands the cursor on a neighbour,
+  rendered by both board views).
+- **Edit Save no longer confirms**; instead closing a **dirty** task form (Esc /
+  outside / X / Cancel) prompts to discard unsaved input (req 10.6 / 11.7 updated).
+- **Esc** on a board clears the cursor, then backs out to **Home**.
+- **Archived-tasks drawer is keyboard-navigable** — local cursor (arrows always,
+  `j`/`k` with Vim on), Enter/`u` restore, Del/Backspace delete, selection ring +
+  `listbox`/`option` roles.
+- **Help dialog renders shortcuts for the active mode** (`visibleBindings`) and
+  shows a live Vim ON/OFF banner; `lib/keymap.ts` gained `vimOnly`/`vimKeys`
+  metadata + the `visibleBindings` helper.
+
+### Verification
+- `pnpm typecheck` — clean. `pnpm lint` — 0 errors (3 stock shadcn warnings).
+- `pnpm test` — **62/62** pass (added Vim gating/toggle, Shift+D confirm,
+  archived-drawer nav, Esc→Home, and discard-guard cases; new `keymapTable.test.ts`).
+- `pnpm build` + `pnpm build:single` — both succeed.

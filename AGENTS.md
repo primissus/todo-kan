@@ -54,15 +54,17 @@ src/
     AppHeader is inline in App.tsx; SearchBar, SettingsDialog, ThemeControls,
     ConfirmModal, TypeToConfirmModal, TagInput (Floating UI), Tooltip (Floating UI),
     ExportDialog, ImportDialog,
-    CommandPalette (search), HelpDialog (? cheat sheet), HintOverlay (f hints),
-    KeyboardStatus (move-mode banner + sr-only selection announcements)
+    CommandPalette (search), HelpDialog (? cheat sheet, mode-aware), HintOverlay (f hints),
+    KeyboardStatus (move-mode banner + sr-only selection announcements),
+    CommandLine (: command line — Vim-keys toggle + bottom-left mode indicator)
   features/
     BoardHeader.tsx, TaskFormDialog.tsx, ArchivedTasksDrawer.tsx   # shared by both views
     home/    HomePage, BoardCard
     todo/    TodoView, TaskRow
     kanban/  KanbanView, Column, KanbanCard, ColumnsSettings
   styles/ globals.css, theme.css
-  test/   setup.ts, store.test.ts, render.test.tsx, keymap.test.tsx, hints.test.ts, uiStore.test.ts
+  test/   setup.ts, store.test.ts, render.test.tsx, keymap.test.tsx,
+          keymapTable.test.ts, hints.test.ts, uiStore.test.ts
 ```
 
 ## Architecture (read before touching state/UI)
@@ -82,11 +84,14 @@ src/
 - **Two stores, on purpose.** `useAppStore` is the persisted domain model.
   `useUiStore` is a separate, **non-persisted** store for ephemeral
   keyboard-navigation state: the selection cursor (`selectedId`), move-mode
-  (`moveMode` + an order `moveSnapshot` for Esc-revert), and overlay/modal flags
-  (`paletteOpen`, `helpOpen`, `hintsActive`, `newOpen`, `editId`, `archivedOpen`,
-  `kanbanColumnsOpen`, `homeShowArchived`). Cursor moves must never dirty the
-  persisted blob. `useUiStore` is deliberately "dumb" (primitive setters);
-  `useUiStore` never imports `useAppStore` (no cycle).
+  (`moveMode` + an order `moveSnapshot` for Esc-revert), the Vim-keys toggle
+  (`vimEnabled`) + command-line buffer (`cmdline`), and overlay/modal flags
+  (`paletteOpen`, `helpOpen`, `hintsActive`, `newOpen`, `editId`, `deleteId`,
+  `archivedOpen`, `kanbanColumnsOpen`, `homeShowArchived`). Cursor moves must never
+  dirty the persisted blob. `useUiStore` is deliberately "dumb" (primitive
+  setters); `useUiStore` never imports `useAppStore` (no cycle). `vimEnabled` is
+  the lone exception to "non-persisted" — it mirrors to its own
+  `todokan:vim-enabled` localStorage key (like the theme prefs), not the blob.
 - **Keyboard navigation** is one global `keydown` listener in
   `hooks/useGlobalKeymap.ts`, mounted once in `App`. It reads state via
   `getState()` (not hooks) so it registers once and always sees fresh data; only
@@ -96,6 +101,13 @@ src/
   `restoreBoardOrder`. Cards subscribe to "am I selected?" through the primitive
   selectors in `hooks/useSelection.ts` so a cursor move re-renders only the two
   cards involved, not the list.
+- **Vim keys are opt-in** (`vimEnabled`, off by default). `handleKey` is split
+  into an always-available block (arrows, Enter, Esc, ⌘K/Ctrl+K, `?`, `:`) and a
+  Vim-gated block (j/k/h/l, `m`, `a`, `f`, `/`, Shift-combos). `:` opens the
+  `CommandLine`; `:q`↵ toggles `vimEnabled`. **Esc** clears the cursor, then backs
+  out to Home from a board. **Shift+D** sets `deleteId` to open a destructive
+  confirm; the board views run the exported `deleteTaskWithCursor` on confirm.
+  When adding a shortcut, decide which block it belongs in.
 
 ## Conventions
 
@@ -141,7 +153,9 @@ src/
    shortcuts.
 9. **`keymap.ts` ↔ `useGlobalKeymap.ts` must stay in sync.** `keymap.ts` is only
    the display table for the Help dialog; the actual dispatch is hand-written in
-   the hook. Add a binding to both.
+   the hook. Add a binding to both. Each `keymap.ts` row carries mode metadata
+   (`vimOnly` / `vimKeys`); `visibleBindings(vimEnabled)` filters them so the Help
+   dialog matches the active mode. A Vim-gated dispatch ⇒ mark its row `vimOnly`.
 10. **App version is a build-time constant.** `__APP_VERSION__` is injected via
     `define` in BOTH `vite.config.ts` and `vitest.config.ts` (read from
     `package.json`); `src/lib/version.ts` re-exports it. If you add another
@@ -152,8 +166,10 @@ src/
 - `pnpm test` runs vitest (`vitest.config.ts`, jsdom, polyfills + `useUiStore`
   reset in `src/test/setup.ts`). `store.test.ts` covers data logic;
   `render.test.tsx` mounts the real views; `keymap.test.tsx` drives the global
-  shortcuts (`fireEvent.keyDown(window, …)`); `hints.test.ts` + `uiStore.test.ts`
-  cover the pure/ephemeral pieces.
+  shortcuts (`fireEvent.keyDown(window, …)`) incl. the Vim toggle, Shift+D confirm,
+  archived-drawer nav, Esc→Home and the discard guard; `keymapTable.test.ts`
+  covers the mode-aware Help table (`visibleBindings`); `hints.test.ts` +
+  `uiStore.test.ts` cover the pure/ephemeral pieces.
 - After UI/logic changes, run `pnpm typecheck && pnpm lint && pnpm test`, then
   `pnpm build` and `pnpm build:single`. Note `tsc -b` type-checks the test files
   too — a green `vitest` run is not enough on its own.

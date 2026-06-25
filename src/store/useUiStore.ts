@@ -11,7 +11,16 @@
 // actions, then endMove() — so this store never imports useAppStore (no cycle).
 
 import { create } from 'zustand';
+import { storage } from '@/lib/storage';
 import type { ColumnId } from '@/lib/types/domain';
+
+// Vim keys are OFF by default; the preference is a single localStorage key
+// (kept out of the persisted domain blob, like the theme prefs) so it survives
+// reloads. Toggled from the bottom-left command line by typing `:q` ↵.
+const VIM_KEY = 'todokan:vim-enabled';
+function readVimEnabled(): boolean {
+  return storage.getItem(VIM_KEY) === '1';
+}
 
 export interface MoveSnapshot {
   kind: 'task' | 'board';
@@ -37,6 +46,19 @@ export interface UiState {
   /** Leave move-mode (commit — data is already mutated live). */
   endMove: () => void;
 
+  /** Master switch for the Vim-style key motions (j/k/h/l, m, a, f, Shift+…).
+   *  When off, only the "simple" keys work: arrows, Enter, Esc, ⌘K, ? and `:`. */
+  vimEnabled: boolean;
+  toggleVim: () => void;
+  setVimEnabled: (v: boolean) => void;
+
+  /** Bottom-left command line. `null` = closed; a string = open, holding the
+   *  text typed after the leading `:`. Opened with `:`, run with Enter. */
+  cmdline: string | null;
+  openCmdline: () => void;
+  setCmdline: (v: string) => void;
+  closeCmdline: () => void;
+
   // Global overlays
   paletteOpen: boolean;
   setPaletteOpen: (v: boolean) => void;
@@ -51,6 +73,9 @@ export interface UiState {
   setNewOpen: (v: boolean) => void;
   editId: string | null;
   setEditId: (id: string | null) => void;
+  /** Task pending a (confirmed) Shift+D delete; null = no confirm open. */
+  deleteId: string | null;
+  setDeleteId: (id: string | null) => void;
   archivedOpen: boolean;
   setArchivedOpen: (v: boolean) => void;
   kanbanColumnsOpen: boolean;
@@ -70,11 +95,14 @@ export const initialUiState = {
   selectedId: null,
   moveMode: false,
   moveSnapshot: null,
+  vimEnabled: false,
+  cmdline: null as string | null,
   paletteOpen: false,
   helpOpen: false,
   hintsActive: false,
   newOpen: false,
   editId: null,
+  deleteId: null,
   archivedOpen: false,
   kanbanColumnsOpen: false,
   homeShowArchived: false,
@@ -83,11 +111,27 @@ export const initialUiState = {
 
 export const useUiStore = create<UiState>((set) => ({
   ...initialUiState,
+  vimEnabled: readVimEnabled(),
 
   setSelected: (id) => set({ selectedId: id }),
 
   beginMove: (snap) => set({ moveMode: true, moveSnapshot: snap }),
   endMove: () => set({ moveMode: false, moveSnapshot: null }),
+
+  setVimEnabled: (v) => {
+    storage.setItem(VIM_KEY, v ? '1' : '0');
+    set({ vimEnabled: v });
+  },
+  toggleVim: () =>
+    set((s) => {
+      const v = !s.vimEnabled;
+      storage.setItem(VIM_KEY, v ? '1' : '0');
+      return { vimEnabled: v };
+    }),
+
+  openCmdline: () => set({ cmdline: '' }),
+  setCmdline: (v) => set({ cmdline: v }),
+  closeCmdline: () => set({ cmdline: null }),
 
   setPaletteOpen: (v) => set({ paletteOpen: v }),
   setHelpOpen: (v) => set({ helpOpen: v }),
@@ -95,14 +139,17 @@ export const useUiStore = create<UiState>((set) => ({
 
   setNewOpen: (v) => set({ newOpen: v }),
   setEditId: (id) => set({ editId: id }),
+  setDeleteId: (id) => set({ deleteId: id }),
   setArchivedOpen: (v) => set({ archivedOpen: v }),
   setKanbanColumnsOpen: (v) => set({ kanbanColumnsOpen: v }),
   resetModals: () =>
     set({
       newOpen: false,
       editId: null,
+      deleteId: null,
       archivedOpen: false,
       kanbanColumnsOpen: false,
+      cmdline: null,
     }),
   setHomeShowArchived: (v) => set({ homeShowArchived: v }),
   toggleHomeShowArchived: () =>

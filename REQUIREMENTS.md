@@ -31,7 +31,9 @@ A web app that can be **statically generated** to create and manage multiple
 3. Button to hide/show completed tasks.
 4. New-task form: title, description, labels (chips).
 5. Tasks can be edited.
-6. Editing goes through a **confirm modal**.
+6. Editing **Save applies immediately** (no confirm). Closing a form with
+   **unsaved edits** prompts to discard. *(Superseded the original edit-confirm
+   modal — see PROGRESS.)*
 7. A "clear" button with a confirmation modal requiring the word **`clear`**.
 8. Tasks can be **drag-and-drop reordered**.
 9. Tasks can be archived; a button shows archived; archived can be unarchived.
@@ -43,7 +45,8 @@ A web app that can be **statically generated** to create and manage multiple
 4. An "add" CTA button (plus icon).
 5. New-task form: title, description, **status (column)**, labels (chips).
 6. Tasks can be edited.
-7. Editing goes through a **confirm modal**.
+7. Editing **Save applies immediately** (no confirm); closing with **unsaved
+   edits** prompts to discard. *(Superseded the original edit-confirm modal.)*
 8. The edit modal contains a **dropdown to change status (column)**.
 9. Tasks can be **reordered vertically** and **moved across columns** via drag-and-drop.
 10. A "clear" button with a confirmation modal requiring the word **`clear`**.
@@ -51,26 +54,36 @@ A web app that can be **statically generated** to create and manage multiple
 
 ### Keyboard navigation (12)
 
-Vim-style keyboard control, available across the app (added after the initial spec).
+Vim-style keyboard control, added after the initial spec and made **opt-in**.
 
-1. **`j` / `k` / `h` / `l` and arrow keys** move a **selection cursor**. Kanban:
-   `j`/`k` within a column, `h`/`l` between columns. TODO: `j`/`k` between rows.
-   Home: across list/board cards.
+0. **Vim keys are off by default.** Toggle them from the bottom-left command line:
+   press **`:`**, type **`q`**, **Enter** (`:q`↵). The preference persists (its own
+   localStorage key). With Vim keys off, only the "simple" keys work — **arrow
+   keys**, **Enter**, **Esc**, **⌘K**/**Ctrl+K**, **`?`**, **`:`** — and the
+   letter motions / hints / Shift-combos below are inactive.
+1. **`j` / `k` / `h` / `l` and arrow keys** move a **selection cursor** (arrows
+   always; `j`/`k`/`h`/`l` only with Vim keys on). Kanban: `j`/`k` within a column,
+   `h`/`l` between columns. TODO: `j`/`k` between rows. Home: across cards.
 2. **`m`** picks up the selected item to **move** it; `j`/`k`/`h`/`l`/arrows
    relocate it live, **Enter** drops it, **Esc** snaps it back. Works for Kanban
    cards (reorder + change column), TODO rows (reorder), and Home cards (reorder).
 3. **Enter** opens the selected item — edit a task, or open a board from Home.
 4. **`a`** archives the selected item (and advances the cursor).
-5. **Shift+A** toggles archived — the per-board archived drawer, or "show archived"
-   on Home.
-6. **Shift+C** opens the Kanban columns settings.
-7. **Shift+N** creates a new task/card (in a board) or a new list (on Home).
-8. **`/`**, **⌘K**, **Ctrl+K** open a **search palette** over the current board's
-   tasks (lists/boards on Home); choosing a result jumps the cursor to it.
-9. **`f`** enters **hint mode** (Vimium-style) — type the label over any clickable
-   element to activate it.
-10. **`?`** opens a **help dialog** listing every shortcut; a header button opens it too.
-11. Shortcuts are ignored while typing in a field or while a dialog is open.
+5. **Shift+D** deletes the selected task **after a confirm dialog** (advances the
+   cursor); Home board cards keep their own confirmed delete.
+6. **Esc** clears the cursor; pressed again on a board it **backs out to Home**.
+7. **Shift+A** toggles archived — the per-board archived drawer, or "show archived"
+   on Home. The **archived drawer is itself keyboard-navigable** (arrows / `j`/`k`
+   to move a cursor, **Enter**/`u` to restore, **Del**/Backspace to delete).
+8. **Shift+C** opens the Kanban columns settings.
+9. **Shift+N** creates a new task/card (in a board) or a new list (on Home).
+10. **`/`**, **⌘K**, **Ctrl+K** open a **search palette** over the current board's
+    tasks (lists/boards on Home); choosing a result jumps the cursor to it.
+11. **`f`** enters **hint mode** (Vimium-style) — type the label over any clickable
+    element to activate it.
+12. **`?`** opens a **help dialog** that lists shortcuts **for the active mode**
+    (Vim-only rows appear only when Vim keys are on); a header button opens it too.
+13. Shortcuts are ignored while typing in a field or while a dialog is open.
 
 ## Locked stack decisions
 

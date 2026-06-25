@@ -1,15 +1,21 @@
 // The single global keyboard handler. Mounted once in App. It owns:
 //   - the should-handle guard (ignore keys while typing or while a dialog owns them),
 //   - cursor movement (j/k/h/l + arrows) over the current view's items,
-//   - actions (Enter / a / Shift+A / Shift+C / Shift+N / m / / · ⌘K · f · ?),
-//   - move-mode relocation (live, via existing store actions) + Esc revert.
+//   - actions (Enter / a / Shift+A / Shift+C / Shift+D / Shift+N / m / / · ⌘K · f · ?),
+//   - move-mode relocation (live, via existing store actions) + Esc revert,
+//   - the `:` command line opener (toggles Vim keys via `:q` ↵).
+//
+// Vim keys are OPT-IN (ui.vimEnabled, off by default). When off, only the
+// "simple" keys fire: arrows (move), Enter (open), Esc (clear), ⌘K (search),
+// `?` (help) and `:` (command line). The letter motions, hints and Shift combos
+// are gated behind the mode so a normal QWERTY user never triggers them.
 //
 // State reads go through getState() (not hooks) so the listener registers once and
 // always sees fresh data; only the route is tracked via a ref. The HelpDialog
 // reflects these bindings from lib/keymap.ts — keep the two in sync.
 
 import { useEffect, useRef } from 'react';
-import { goBoard, useRoute, type Route } from '@/lib/router';
+import { goBoard, goHome, useRoute, type Route } from '@/lib/router';
 import { filterBySearch } from '@/lib/search';
 import { useAppStore } from '@/store/useAppStore';
 import { useUiStore, type UiState } from '@/store/useUiStore';
@@ -193,6 +199,27 @@ function archiveSelected(ctx: Ctx, route: Route, id: string): void {
   ui.setSelected(next);
 }
 
+/** Permanently delete a task and land the cursor on a neighbour. Exported so the
+ *  Shift+D confirm dialog (rendered by the board views) runs it on confirm.
+ *  Tasks only — boards are deleted (with confirm) from their Home card. */
+export function deleteTaskWithCursor(
+  boardId: string,
+  ctx: 'kanban' | 'todo',
+  id: string,
+): void {
+  const app = useAppStore.getState();
+  const ui = useUiStore.getState();
+  const board = app.boards[boardId];
+  if (!board) return;
+  const list =
+    ctx === 'kanban'
+      ? kanbanColumns(board, app.tasks).find((c) => c.ids.includes(id))?.ids ?? []
+      : todoVisibleIds(board, app.tasks);
+  const next = neighborAfterRemoval(list, id);
+  app.deleteTask(id);
+  ui.setSelected(next);
+}
+
 function beginMove(ctx: Ctx, route: Route, id: string): void {
   const app = useAppStore.getState();
   const ui = useUiStore.getState();
@@ -365,8 +392,16 @@ function handleKey(e: KeyboardEvent, route: Route): void {
   const lower = key.toLowerCase();
   const mod = e.metaKey || e.ctrlKey;
 
-  // Global overlays
-  if (key === '/' || (mod && lower === 'k')) {
+  // ---- Always available (Vim on or off) -----------------------------------
+  // `:` opens the bottom-left command line — this is how Vim keys get toggled
+  // (`:q` ↵), so it must never be gated behind the very mode it switches.
+  if (key === ':') {
+    e.preventDefault();
+    ui.openCmdline();
+    return;
+  }
+  // ⌘/Ctrl+K is a standard palette chord; `?` opens Help. Both stay available.
+  if (mod && lower === 'k') {
     e.preventDefault();
     ui.setPaletteOpen(true);
     return;
@@ -376,16 +411,46 @@ function handleKey(e: KeyboardEvent, route: Route): void {
     ui.setHelpOpen(true);
     return;
   }
-  if (lower === 'f' && !e.shiftKey) {
-    e.preventDefault();
-    ui.setHintsActive(true);
-    return;
-  }
   if (key === 'Escape') {
+    // Escalating back-out: clear the cursor first, then leave the board for Home.
     if (ui.selectedId) {
       e.preventDefault();
       ui.setSelected(null);
+    } else if (route.name === 'board') {
+      e.preventDefault();
+      goHome();
     }
+    return;
+  }
+  // Enter opens the selected item; arrow keys move the cursor — the "simple"
+  // shortcuts that work without Vim.
+  if (key === 'Enter') {
+    if (!ui.selectedId) return;
+    e.preventDefault();
+    if (ctx === 'home') goBoard(ui.selectedId);
+    else ui.setEditId(ui.selectedId);
+    return;
+  }
+  if (key.startsWith('Arrow')) {
+    const dir = dirFromKey(key);
+    if (dir) {
+      e.preventDefault();
+      moveCursor(ctx, route, dir);
+    }
+    return;
+  }
+
+  // ---- Vim motions (only when enabled) ------------------------------------
+  if (!ui.vimEnabled) return;
+
+  if (key === '/') {
+    e.preventDefault();
+    ui.setPaletteOpen(true);
+    return;
+  }
+  if (lower === 'f' && !e.shiftKey) {
+    e.preventDefault();
+    ui.setHintsActive(true);
     return;
   }
 
@@ -409,6 +474,14 @@ function handleKey(e: KeyboardEvent, route: Route): void {
     }
     return;
   }
+  if (lower === 'd' && e.shiftKey) {
+    // Tasks only (Home board cards own their own confirmed delete). Opens a
+    // confirm dialog — the board view runs deleteTaskWithCursor on confirm.
+    if (ctx === 'home' || !ui.selectedId) return;
+    e.preventDefault();
+    ui.setDeleteId(ui.selectedId);
+    return;
+  }
   // No other shift combo is bound — don't hijack the browser's.
   if (e.shiftKey) return;
 
@@ -425,14 +498,8 @@ function handleKey(e: KeyboardEvent, route: Route): void {
     beginMove(ctx, route, ui.selectedId);
     return;
   }
-  if (key === 'Enter') {
-    if (!ui.selectedId) return;
-    e.preventDefault();
-    if (ctx === 'home') goBoard(ui.selectedId);
-    else ui.setEditId(ui.selectedId);
-    return;
-  }
 
+  // j/k/h/l (arrow keys are handled in the always-available block above).
   const dir = dirFromKey(key);
   if (dir) {
     e.preventDefault();

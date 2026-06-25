@@ -22,10 +22,14 @@ After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and
   persisted store.
 - **Keyboard nav**: one global `keydown` listener in `src/hooks/useGlobalKeymap.ts`
   (mounted once in `App`) drives a Vim-style cursor (j/k/h/l + arrows), move-mode
-  (`m`), actions (Enter/`a`/Shift+A/Shift+C/Shift+N), search (`/` ⌘K), hints (`f`),
-  help (`?`). The cheat-sheet table in `src/lib/keymap.ts` drives the `?` Help
-  dialog — **keep the two in sync**. Cards read "am I selected?" via the granular
-  selectors in `src/hooks/useSelection.ts`.
+  (`m`), actions (Enter/`a`/Shift+A/Shift+C/Shift+D-delete/Shift+N), search
+  (`/` ⌘K), hints (`f`), help (`?`). **Vim keys are opt-in** (`useUiStore.vimEnabled`,
+  off by default, persisted to the `todokan:vim-enabled` localStorage key): when
+  off only the "simple" keys fire (arrows, Enter, Esc, ⌘K, `?`, `:`). Toggle via
+  the bottom-left command line (`src/components/CommandLine.tsx`) — press `:`,
+  type `q`, Enter. The cheat-sheet table in `src/lib/keymap.ts` drives the `?`
+  Help dialog — **keep the two in sync**. Cards read "am I selected?" via the
+  granular selectors in `src/hooks/useSelection.ts`.
 - **Persistence**: localStorage (`src/lib/storage.ts`) — chosen so `build:single`
   works from `file://`. No IndexedDB.
 - **No dynamic `import()` / `React.lazy`** in feature code (single-file build needs one chunk).

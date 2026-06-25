@@ -71,26 +71,42 @@ Deep links + back/forward that survive `file://`; no `react-router`.
 
 Vim-style control layered on without disturbing the domain model:
 
+- **Opt-in.** Vim motions are off by default (`useUiStore.vimEnabled`, persisted
+  to its own `todokan:vim-enabled` localStorage key — not the domain blob).
+  Toggled from the bottom-left command line (`src/components/CommandLine.tsx`):
+  `:` opens it, `q`+Enter runs `:q`. `handleKey` is split into an
+  **always-available** block (arrows, Enter, Esc, ⌘K/Ctrl+K, `?`, `:`) and a
+  **Vim-gated** block (j/k/h/l, `m`, `a`, `f` hints, `/`, Shift-combos) behind
+  `if (!vimEnabled) return`.
 - **Two stores.** `useAppStore` stays the persisted domain model. A second,
   **non-persisted** `src/store/useUiStore.ts` holds ephemeral nav state — the
-  selection cursor, move-mode + an order snapshot for revert, and overlay/modal
-  flags. This keeps cursor moves out of the persisted blob and lets cards
-  subscribe to a primitive "am I selected?" (`src/hooks/useSelection.ts`) so a
-  cursor move re-renders only the two affected cards.
+  selection cursor, move-mode + an order snapshot for revert, the `vimEnabled`
+  flag, the `cmdline` buffer, and overlay/modal flags (incl. `deleteId` for the
+  Shift+D confirm). This keeps cursor moves out of the persisted blob and lets
+  cards subscribe to a primitive "am I selected?" (`src/hooks/useSelection.ts`)
+  so a cursor move re-renders only the two affected cards.
 - **One listener.** `src/hooks/useGlobalKeymap.ts` registers a single `window`
   `keydown` handler (mounted once in `App`), reading state via `getState()` and
   the route via a ref so it never re-registers. It owns the should-handle guard
   (skip while typing / while a dialog is open / for unregistered modifier combos;
   don't hijack Enter/Space on a focused control), cursor math, and move-mode.
-  Selection never moves DOM focus, so it can't conflict with dnd-kit's keyboard
-  sensor.
+  **Esc** clears the cursor, then backs out to Home from a board. **Shift+D**
+  opens a confirm (sets `deleteId`); the board views run the exported
+  `deleteTaskWithCursor` on confirm. Selection never moves DOM focus, so it can't
+  conflict with dnd-kit's keyboard sensor.
 - **Reuses store primitives.** Move-mode relocates via `moveTaskToColumn` /
   `reorderTaskInBoard` / the new `reorderBoard`; Esc-revert restores the snapshot
   via `restoreTaskOrder` / `restoreBoardOrder`.
-- **Overlays** (all statically imported — single-file safe): `CommandPalette`
-  (`/` ⌘K Ctrl+K, reuses `lib/search`), `HelpDialog` (`?`, rendered from the
-  declarative `src/lib/keymap.ts`), `HintOverlay` (`f`, Vimium hints from the pure
+- **Overlays** (all statically imported — single-file safe): `CommandLine` (`:`,
+  the Vim toggle + mode indicator), `CommandPalette` (`/` ⌘K Ctrl+K, reuses
+  `lib/search`), `HelpDialog` (`?`, rendered from the declarative
+  `src/lib/keymap.ts` via `visibleBindings(vimEnabled)` so it lists shortcuts for
+  the active mode), `HintOverlay` (`f`, Vimium hints from the pure
   `src/lib/hints.ts`, a `z-[100]` portal above the `z-50` dialogs).
+- **Dialogs are self-navigated.** While any dialog is open the global keymap is
+  suppressed, so the archived-tasks drawer carries its own local cursor (arrows
+  always, `j`/`k` with Vim on; Enter/`u` restore, Del/Backspace delete), and the
+  task form prompts to discard when closed dirty.
 
 ## App version
 

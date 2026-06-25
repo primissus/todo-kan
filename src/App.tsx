@@ -7,6 +7,7 @@ import { CommandPalette } from '@/components/CommandPalette';
 import { HelpDialog } from '@/components/HelpDialog';
 import { HintOverlay } from '@/components/HintOverlay';
 import { KeyboardStatus } from '@/components/KeyboardStatus';
+import { CommandLine } from '@/components/CommandLine';
 import { useSystemThemeSync } from '@/hooks/useTheme';
 import { useGlobalKeymap } from '@/hooks/useGlobalKeymap';
 import { goHome, useRoute } from '@/lib/router';
@@ -79,6 +80,7 @@ export default function App() {
       <HelpDialog />
       <HintOverlay />
       <KeyboardStatus />
+      <CommandLine />
       <Toaster richColors position="bottom-right" />
     </div>
   );

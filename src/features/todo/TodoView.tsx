@@ -21,8 +21,10 @@ import { TaskRow } from '@/features/todo/TaskRow';
 import { TaskFormDialog } from '@/features/TaskFormDialog';
 import { ArchivedTasksDrawer } from '@/features/ArchivedTasksDrawer';
 import { TypeToConfirmModal } from '@/components/TypeToConfirmModal';
+import { ConfirmModal } from '@/components/ConfirmModal';
 import { useAppStore } from '@/store/useAppStore';
 import { useUiStore } from '@/store/useUiStore';
+import { deleteTaskWithCursor } from '@/hooks/useGlobalKeymap';
 import { useBoard, useBoardTasks, useAllTags } from '@/store/selectors';
 
 export interface TodoViewProps {
@@ -45,6 +47,8 @@ export function TodoView({ boardId }: TodoViewProps) {
   const setNewOpen = useUiStore((s) => s.setNewOpen);
   const editId = useUiStore((s) => s.editId);
   const setEditId = useUiStore((s) => s.setEditId);
+  const deleteId = useUiStore((s) => s.deleteId);
+  const setDeleteId = useUiStore((s) => s.setDeleteId);
   const archivedOpen = useUiStore((s) => s.archivedOpen);
   const setArchivedOpen = useUiStore((s) => s.setArchivedOpen);
 
@@ -63,6 +67,9 @@ export function TodoView({ boardId }: TodoViewProps) {
     : active.filter((t) => !t.completed);
   const archivedCount = tasks.filter((t) => t.archived).length;
   const editTaskObj = editId ? tasks.find((t) => t.id === editId) : undefined;
+  const deleteTaskObj = deleteId
+    ? tasks.find((t) => t.id === deleteId)
+    : undefined;
 
   const handleDragEnd = (e: DragEndEvent) => {
     const { active: a, over } = e;
@@ -181,6 +188,23 @@ export function TodoView({ boardId }: TodoViewProps) {
         boardId={boardId}
         open={archivedOpen}
         onOpenChange={setArchivedOpen}
+      />
+
+      <ConfirmModal
+        open={!!deleteTaskObj}
+        onOpenChange={(o) => !o && setDeleteId(null)}
+        title="Delete this task?"
+        description={
+          deleteTaskObj
+            ? `"${deleteTaskObj.title || 'Untitled task'}" will be permanently deleted.`
+            : undefined
+        }
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => {
+          if (deleteId) deleteTaskWithCursor(boardId, 'todo', deleteId);
+          setDeleteId(null);
+        }}
       />
 
       <TypeToConfirmModal
