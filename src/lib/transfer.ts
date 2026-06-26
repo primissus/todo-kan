@@ -51,6 +51,62 @@ export function serializeExport(payload: TransferPayload): string {
   return JSON.stringify(payload, null, 2);
 }
 
+/**
+ * A stable, id- AND timestamp-independent fingerprint of a payload's meaningful
+ * content. Because import re-keys every id, two payloads that hold "the same
+ * data" share no ids — so equality must compare titles/structure, not ids. Used
+ * by file-sync to decide whether a linked file actually differs from the app.
+ */
+export function fingerprintPayload(payload: TransferPayload): string {
+  const taskById = new Map(payload.tasks.map((t) => [t.id, t]));
+  const boards = payload.boards.map((b) => {
+    const colTitle = new Map((b.columns ?? []).map((c) => [c.id, c.title]));
+    return {
+      type: b.type,
+      title: b.title,
+      description: b.description ?? '',
+      tags: [...(b.tags ?? [])],
+      archived: !!b.archived,
+      showCompleted: b.showCompleted ?? true,
+      columns: (b.columns ?? [])
+        .slice()
+        .sort((x, y) => x.order - y.order)
+        .map((c) => ({ title: c.title, isDone: !!c.isDone })),
+      // Iterate taskIds so order (the single source of order) is part of identity.
+      tasks: (b.taskIds ?? [])
+        .map((tid) => taskById.get(tid))
+        .filter((t): t is Task => !!t)
+        .map((t) => ({
+          title: t.title,
+          description: t.description ?? '',
+          tags: [...(t.tags ?? [])],
+          completed: !!t.completed,
+          archived: !!t.archived,
+          column: t.columnId ? colTitle.get(t.columnId) ?? null : null,
+          dueAt: t.dueAt ?? null,
+          remindAt: t.remindAt ?? null,
+          notes: (t.notes ?? []).map((n) => n.text),
+        })),
+    };
+  });
+  return JSON.stringify(boards);
+}
+
+/** Whether two payloads carry the same data (ignoring ids/timestamps). */
+export function payloadsEqual(a: TransferPayload, b: TransferPayload): boolean {
+  return fingerprintPayload(a) === fingerprintPayload(b);
+}
+
+export interface PayloadSummary {
+  boards: number;
+  tasks: number;
+}
+
+/** Quick counts for a confirmation banner. */
+export function summarizePayload(payload: TransferPayload): PayloadSummary {
+  return { boards: payload.boards.length, tasks: payload.tasks.length };
+}
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === 'object';
 }

@@ -80,6 +80,31 @@ export function formatDateTime(ts: number): string {
   }
 }
 
+/** Time-only stamp, e.g. "9:00 AM" (locale-aware). */
+export function formatTime(ts: number): string {
+  try {
+    return new Date(ts).toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  } catch {
+    return '';
+  }
+}
+
+/** Date-only stamp, e.g. "Sat, Jun 28" (locale-aware). */
+export function formatDate(ts: number): string {
+  try {
+    return new Date(ts).toLocaleDateString(undefined, {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
+  } catch {
+    return '';
+  }
+}
+
 /** Long month + year header, e.g. "June 2026" (locale-aware). */
 export function formatMonthYear(year: number, month: number): string {
   try {

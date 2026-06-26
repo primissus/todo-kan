@@ -11,6 +11,7 @@ import { CommandLine } from '@/components/CommandLine';
 import { useSystemThemeSync } from '@/hooks/useTheme';
 import { useGlobalKeymap } from '@/hooks/useGlobalKeymap';
 import { useReminderScheduler } from '@/hooks/useReminderScheduler';
+import { useFileSyncWriter } from '@/hooks/useFileSyncWriter';
 import { goHome, useRoute } from '@/lib/router';
 import { useAppStore } from '@/store/useAppStore';
 import { useUiStore } from '@/store/useUiStore';
@@ -22,6 +23,7 @@ export default function App() {
   useSystemThemeSync();
   useGlobalKeymap();
   useReminderScheduler();
+  useFileSyncWriter();
   const route = useRoute();
   const setHelpOpen = useUiStore((s) => s.setHelpOpen);
   const [settingsOpen, setSettingsOpen] = useState(false);

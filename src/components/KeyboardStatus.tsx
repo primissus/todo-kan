@@ -15,6 +15,11 @@ export function KeyboardStatus() {
     if (t) return t.title || 'Untitled task';
     const b = s.boards[selectedId];
     if (b) return b.title || 'Untitled';
+    // The cursor can also sit on a Kanban column header (a column id).
+    for (const board of Object.values(s.boards)) {
+      const col = board.columns.find((c) => c.id === selectedId);
+      if (col) return `${col.title || 'Untitled'} column`;
+    }
     return '';
   });
 

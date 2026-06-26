@@ -1,12 +1,19 @@
-import { useState } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { toast } from 'sonner';
-import { Archive, Trash2 } from 'lucide-react';
+import { Archive, Bell, CalendarClock, Pencil, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,7 +29,9 @@ import {
 import { TagInput } from '@/components/TagInput';
 import { DateTimePicker } from '@/components/DateTimePicker';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { Linkify } from '@/components/Linkify';
 import { NoteThread } from '@/features/NoteThread';
+import { formatDateTime } from '@/lib/datetime';
 import {
   notificationPermission,
   requestNotificationPermission,
@@ -41,12 +50,16 @@ export interface TaskDialogProps {
 }
 
 /**
- * Unified task view/edit modal — opened on Enter / click / the card's open button
- * (it replaced the separate edit dialog). The detail fields (title, description,
- * status, due date, reminder, labels) commit LIVE to the store as you edit, and
- * the discussion thread is embedded below. Because everything auto-saves, there's
- * no Save/Discard for the fields; the only unsaved state is an in-progress note
- * draft, which prompts a discard confirm on close.
+ * Unified task view/edit modal — opened on Enter / click / the card's open button.
+ * It opens **read-only**: the details (title, description with rendered links,
+ * status, due date, reminder, labels) are shown for reading, and the discussion
+ * thread is embedded below. Press **Shift+E** (or the Edit button) to reveal the
+ * form, whose fields commit LIVE to the store as you edit (no Save/Discard — the
+ * only unsaved state is an in-progress note draft, which prompts on close).
+ * **Shift+C** jumps to the comment box; **"Done editing"** returns to the
+ * read-only view. **Escape** first steps out of a focused field (nothing is lost —
+ * fields auto-save), then closes the dialog on a second Escape when no field is
+ * focused.
  */
 export function TaskDialog({
   taskId,
@@ -60,9 +73,19 @@ export function TaskDialog({
   const archiveTask = useAppStore((s) => s.archiveTask);
   const deleteTask = useAppStore((s) => s.deleteTask);
 
+  const [editMode, setEditMode] = useState(false);
   const [noteUnsaved, setNoteUnsaved] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const composeRef = useRef<HTMLTextAreaElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Reset to read-only when the dialog CLOSES, so the next open's first paint is
+  // already the read-only view. (Resetting on open runs after paint → a one-frame
+  // flash of the stale edit form, whose autoFocus'd input briefly steals focus.)
+  useEffect(() => {
+    if (!open) setEditMode(false);
+  }, [open]);
 
   if (!taskId || !task) {
     // Keep a (closed) Dialog mounted so the open/close transition stays smooth.
@@ -96,6 +119,33 @@ export function TaskDialog({
     else onOpenChange(false);
   };
 
+  // Modal-local accelerators: Shift+E → edit, Shift+C → jump to the comment box.
+  // Ignored while typing in a field so they don't eat the keystroke.
+  const onShortcut = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key.toLowerCase();
+    if (k !== 'e' && k !== 'c') return;
+    const ae = document.activeElement as HTMLElement | null;
+    const typing =
+      !!ae &&
+      (ae.tagName === 'INPUT' ||
+        ae.tagName === 'TEXTAREA' ||
+        ae.tagName === 'SELECT' ||
+        ae.isContentEditable);
+    if (typing) return;
+    if (k === 'e') {
+      if (editMode) return;
+      e.preventDefault();
+      setEditMode(true);
+    } else {
+      e.preventDefault();
+      composeRef.current?.focus();
+    }
+  };
+
+  const currentColumn =
+    columns?.find((c) => c.id === task.columnId) ?? columns?.[0];
+
   return (
     <Dialog
       open={open}
@@ -103,93 +153,139 @@ export function TaskDialog({
         if (!o) requestClose();
       }}
     >
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent
+        ref={contentRef}
+        tabIndex={-1}
+        className="sm:max-w-lg"
+        onKeyDown={onShortcut}
+        onEscapeKeyDown={(e) => {
+          // Esc "steps out" of a focused field first (without closing — fields
+          // already auto-save, so nothing is lost); it only closes the dialog
+          // when no field is focused (a second Esc, after focus moved off).
+          const ae = document.activeElement as HTMLElement | null;
+          const inField =
+            !!ae &&
+            !!contentRef.current?.contains(ae) &&
+            (ae.tagName === 'INPUT' ||
+              ae.tagName === 'TEXTAREA' ||
+              ae.tagName === 'SELECT' ||
+              ae.isContentEditable);
+          if (inField) {
+            e.preventDefault();
+            contentRef.current?.focus();
+          }
+        }}
+      >
         <DialogHeader>
-          <DialogTitle className="sr-only">Task details</DialogTitle>
+          <DialogTitle className="sr-only">
+            {editMode ? 'Edit task' : 'Task details'}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="grid max-h-[70vh] gap-4 overflow-y-auto pr-1">
-          <div className="grid gap-2">
-            <Label htmlFor="task-title">Title</Label>
-            <Input
-              id="task-title"
-              value={task.title}
-              onChange={(e) => patch({ title: e.target.value })}
-              placeholder="What needs doing?"
+          {editMode ? (
+            <>
+              <div className="grid gap-2">
+                <Label htmlFor="task-title">Title</Label>
+                <Input
+                  id="task-title"
+                  autoFocus
+                  value={task.title}
+                  onChange={(e) => patch({ title: e.target.value })}
+                  placeholder="What needs doing?"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="task-desc">Description</Label>
+                <Textarea
+                  id="task-desc"
+                  value={task.description}
+                  onChange={(e) => patch({ description: e.target.value })}
+                  placeholder="Optional details…"
+                  rows={3}
+                />
+              </div>
+
+              {columns ? (
+                <div className="grid gap-2">
+                  <Label htmlFor="task-status">Status</Label>
+                  <Select
+                    value={task.columnId ?? columns[0]?.id}
+                    onValueChange={(v) => patch({ columnId: v as ColumnId })}
+                  >
+                    <SelectTrigger id="task-status" className="w-full">
+                      <SelectValue placeholder="Select a column" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {columns.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label>Due date</Label>
+                  <DateTimePicker
+                    label="Due date"
+                    placeholder="No due date"
+                    value={task.dueAt ?? null}
+                    onChange={(v) => patch({ dueAt: v })}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Reminder</Label>
+                  <DateTimePicker
+                    label="Reminder"
+                    placeholder="No reminder"
+                    timeFirst
+                    value={task.remindAt ?? null}
+                    onChange={onReminderChange}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Labels</Label>
+                <TagInput
+                  value={task.tags}
+                  onChange={(tags) => patch({ tags })}
+                  suggestions={allTags}
+                  placeholder="Add labels…"
+                />
+              </div>
+            </>
+          ) : (
+            <ReadOnlyView
+              title={task.title}
+              description={task.description}
+              statusTitle={columns ? currentColumn?.title : undefined}
+              dueAt={task.dueAt}
+              remindAt={task.remindAt}
+              tags={task.tags}
+              onEdit={() => setEditMode(true)}
             />
-          </div>
-
-          <div className="grid gap-2">
-            <Label htmlFor="task-desc">Description</Label>
-            <Textarea
-              id="task-desc"
-              value={task.description}
-              onChange={(e) => patch({ description: e.target.value })}
-              placeholder="Optional details…"
-              rows={3}
-            />
-          </div>
-
-          {columns ? (
-            <div className="grid gap-2">
-              <Label htmlFor="task-status">Status</Label>
-              <Select
-                value={task.columnId ?? columns[0]?.id}
-                onValueChange={(v) => patch({ columnId: v as ColumnId })}
-              >
-                <SelectTrigger id="task-status" className="w-full">
-                  <SelectValue placeholder="Select a column" />
-                </SelectTrigger>
-                <SelectContent>
-                  {columns.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ) : null}
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label>Due date</Label>
-              <DateTimePicker
-                label="Due date"
-                placeholder="No due date"
-                value={task.dueAt ?? null}
-                onChange={(v) => patch({ dueAt: v })}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>Reminder</Label>
-              <DateTimePicker
-                label="Reminder"
-                placeholder="No reminder"
-                value={task.remindAt ?? null}
-                onChange={onReminderChange}
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-2">
-            <Label>Labels</Label>
-            <TagInput
-              value={task.tags}
-              onChange={(tags) => patch({ tags })}
-              suggestions={allTags}
-              placeholder="Add labels…"
-            />
-          </div>
+          )}
 
           <Separator />
 
           <div className="grid gap-2">
-            <Label>Discussion</Label>
+            <div className="flex items-center justify-between">
+              <Label>Discussion</Label>
+              <span className="hidden text-xs text-muted-foreground sm:inline">
+                <Kbd>⇧C</Kbd> to comment
+              </span>
+            </div>
             <NoteThread
               taskId={taskId}
               resetKey={taskId}
               onUnsavedChange={setNoteUnsaved}
+              composeRef={composeRef}
             />
           </div>
         </div>
@@ -219,9 +315,15 @@ export function TaskDialog({
             <Archive className="size-4" />
             Archive
           </Button>
-          <Button type="button" size="sm" onClick={requestClose}>
-            Done
-          </Button>
+          {editMode ? (
+            <Button type="button" size="sm" onClick={() => setEditMode(false)}>
+              Done editing
+            </Button>
+          ) : (
+            <Button type="button" size="sm" onClick={requestClose}>
+              Done
+            </Button>
+          )}
         </div>
       </DialogContent>
 
@@ -248,5 +350,126 @@ export function TaskDialog({
         }}
       />
     </Dialog>
+  );
+}
+
+/** A small inline keycap, matching the muted hint style used elsewhere. */
+function Kbd({ children }: { children: ReactNode }) {
+  return (
+    <kbd className="rounded border bg-muted px-1 font-sans text-[10px] font-medium text-muted-foreground">
+      {children}
+    </kbd>
+  );
+}
+
+interface ReadOnlyViewProps {
+  title: string;
+  description: string;
+  /** Undefined on TODO boards (no columns); a column title on Kanban. */
+  statusTitle?: string;
+  dueAt?: number;
+  remindAt?: number;
+  tags: string[];
+  onEdit: () => void;
+}
+
+/** The read-only presentation of a task: rendered links, status, schedule, labels. */
+function ReadOnlyView({
+  title,
+  description,
+  statusTitle,
+  dueAt,
+  remindAt,
+  tags,
+  onEdit,
+}: ReadOnlyViewProps) {
+  return (
+    <div className="grid gap-4">
+      <div className="flex items-start justify-between gap-3">
+        <h2 className="min-w-0 text-lg leading-snug font-semibold break-words">
+          {title || (
+            <span className="font-normal text-muted-foreground">Untitled task</span>
+          )}
+        </h2>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0 gap-1.5"
+          aria-keyshortcuts="Shift+E"
+          onClick={onEdit}
+        >
+          <Pencil className="size-3.5" />
+          Edit
+          <Kbd>⇧E</Kbd>
+        </Button>
+      </div>
+
+      {description.trim() ? (
+        <p className="text-sm break-words whitespace-pre-wrap text-foreground/90">
+          <Linkify text={description} />
+        </p>
+      ) : (
+        <p className="text-sm text-muted-foreground italic">No description.</p>
+      )}
+
+      {(statusTitle !== undefined || dueAt || remindAt || tags.length > 0) && (
+        <dl className="grid gap-2 text-sm">
+          {statusTitle !== undefined ? (
+            <Row term="Status">
+              <Badge variant="secondary">{statusTitle ?? '—'}</Badge>
+            </Row>
+          ) : null}
+          {dueAt ? (
+            <Row term="Due">
+              <span className="inline-flex items-center gap-1.5">
+                <CalendarClock className="size-3.5 text-muted-foreground" />
+                {formatDateTime(dueAt)}
+              </span>
+            </Row>
+          ) : null}
+          {remindAt ? (
+            <Row term="Reminder">
+              <span className="inline-flex items-center gap-1.5">
+                <Bell className="size-3.5 text-muted-foreground" />
+                {formatDateTime(remindAt)}
+              </span>
+            </Row>
+          ) : null}
+          {tags.length > 0 ? (
+            <Row term="Labels" alignTop>
+              <div className="flex flex-wrap gap-1.5">
+                {tags.map((t) => (
+                  <Badge key={t} variant="secondary">
+                    {t}
+                  </Badge>
+                ))}
+              </div>
+            </Row>
+          ) : null}
+        </dl>
+      )}
+    </div>
+  );
+}
+
+function Row({
+  term,
+  alignTop,
+  children,
+}: {
+  term: string;
+  alignTop?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className={`flex gap-3 ${alignTop ? 'items-start' : 'items-center'}`}>
+      <dt
+        className={`w-20 shrink-0 text-muted-foreground ${alignTop ? 'pt-0.5' : ''}`}
+      >
+        {term}
+      </dt>
+      <dd className="min-w-0">{children}</dd>
+    </div>
   );
 }

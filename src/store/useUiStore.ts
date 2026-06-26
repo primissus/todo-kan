@@ -77,6 +77,10 @@ export interface UiState {
   // prop-drilling.
   newOpen: boolean;
   setNewOpen: (v: boolean) => void;
+  /** Target column for the next new Kanban card (Shift+N uses the cursor's column;
+   *  a per-column "+" sets its own). null = first column / not applicable. */
+  newColumnId: ColumnId | null;
+  setNewColumnId: (id: ColumnId | null) => void;
   /** Task whose detail dialog (edit + due/reminder + discussion thread) is open. */
   editId: string | null;
   setEditId: (id: string | null) => void;
@@ -109,6 +113,7 @@ export const initialUiState = {
   helpOpen: false,
   hintsActive: false,
   newOpen: false,
+  newColumnId: null as ColumnId | null,
   editId: null,
   deleteId: null,
   archivedOpen: false,
@@ -147,6 +152,7 @@ export const useUiStore = create<UiState>((set) => ({
   setHintsActive: (v) => set({ hintsActive: v }),
 
   setNewOpen: (v) => set({ newOpen: v }),
+  setNewColumnId: (id) => set({ newColumnId: id }),
   setEditId: (id) => set({ editId: id }),
   setDeleteId: (id) => set({ deleteId: id }),
   setArchivedOpen: (v) => set({ archivedOpen: v }),
@@ -154,6 +160,7 @@ export const useUiStore = create<UiState>((set) => ({
   resetModals: () =>
     set({
       newOpen: false,
+      newColumnId: null,
       editId: null,
       deleteId: null,
       archivedOpen: false,

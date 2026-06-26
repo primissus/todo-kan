@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch';
 import { ThemeControls } from '@/components/ThemeControls';
 import { ExportDialog } from '@/components/ExportDialog';
 import { ImportDialog } from '@/components/ImportDialog';
+import { FileSyncSection } from '@/components/FileSyncSection';
 import { TypeToConfirmModal } from '@/components/TypeToConfirmModal';
 import { APP_VERSION } from '@/lib/version';
 import {
@@ -107,6 +108,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
 
           <div className="grid gap-2">
             <Label>Data</Label>
+            <FileSyncSection />
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"

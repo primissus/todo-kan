@@ -54,6 +54,24 @@ function contextFor(route: Route): Ctx {
   return b?.type === 'kanban' ? 'kanban' : 'todo';
 }
 
+/** True when the cursor is on a Kanban column header (selectedId === a column id). */
+function isKanbanHeader(route: Route, sel: string | null): boolean {
+  if (route.name !== 'board' || !sel) return false;
+  const b = useAppStore.getState().boards[route.id];
+  return !!b && b.type === 'kanban' && b.columns.some((c) => c.id === sel);
+}
+
+/** The Kanban column the cursor is "in": the header's own column, or a card's
+ *  column. null when nothing relevant is selected (→ defaults to first column). */
+function currentKanbanColumnId(route: Route, sel: string | null): ColumnId | null {
+  if (route.name !== 'board' || !sel) return null;
+  const app = useAppStore.getState();
+  const board = app.boards[route.id];
+  if (!board) return null;
+  if (board.columns.some((c) => c.id === sel)) return sel as ColumnId;
+  return app.tasks[sel]?.columnId ?? null;
+}
+
 /** Sorted columns, each with its visible (non-archived) task ids in board order. */
 function kanbanColumns(
   board: Board,
@@ -124,16 +142,24 @@ function selectKanban(
   dir: Dir,
   ui: UiState,
 ): void {
+  // Each column is a vertical list whose FIRST item is the column header (so the
+  // cursor can sit on a header — the row above the first card — and headers are
+  // reachable even in empty columns). Header id === column id; cards follow.
+  const lists = cols.map((c) => [c.id as string, ...c.ids]);
+
   let ci = -1;
   let ri = -1;
-  for (let i = 0; i < cols.length; i++) {
-    const j = sel ? cols[i].ids.indexOf(sel) : -1;
+  for (let i = 0; i < lists.length; i++) {
+    const j = sel ? lists[i].indexOf(sel) : -1;
     if (j >= 0) {
       ci = i;
       ri = j;
       break;
     }
   }
+
+  // Nothing selected yet → land on the first card (or the first header if the
+  // board has no cards at all) so the cursor always has somewhere to go.
   if (ci < 0) {
     for (const c of cols) {
       if (c.ids.length) {
@@ -141,23 +167,24 @@ function selectKanban(
         return;
       }
     }
+    if (lists.length) ui.setSelected(lists[0][0]);
     return;
   }
+
   if (dir === 'down') {
-    const ids = cols[ci].ids;
-    if (ri + 1 < ids.length) ui.setSelected(ids[ri + 1]);
+    if (ri + 1 < lists[ci].length) ui.setSelected(lists[ci][ri + 1]);
     return;
   }
   if (dir === 'up') {
-    if (ri - 1 >= 0) ui.setSelected(cols[ci].ids[ri - 1]);
+    if (ri - 1 >= 0) ui.setSelected(lists[ci][ri - 1]);
     return;
   }
-  const step = dir === 'left' ? -1 : 1;
-  for (let i = ci + step; i >= 0 && i < cols.length; i += step) {
-    if (cols[i].ids.length) {
-      ui.setSelected(cols[i].ids[Math.min(ri, cols[i].ids.length - 1)]);
-      return;
-    }
+  // left / right: step exactly one column, keeping the row (clamped) — so a
+  // shorter/empty neighbour lands you on its nearest item (its header if empty).
+  const ni = ci + (dir === 'left' ? -1 : 1);
+  if (ni >= 0 && ni < lists.length) {
+    const target = lists[ni];
+    ui.setSelected(target[Math.min(ri, target.length - 1)]);
   }
 }
 
@@ -194,7 +221,10 @@ function archiveSelected(ctx: Ctx, route: Route, id: string): void {
     ctx === 'kanban'
       ? kanbanColumns(board, app.tasks).find((c) => c.ids.includes(id))?.ids ?? []
       : todoVisibleIds(board, app.tasks);
-  const next = neighborAfterRemoval(list, id);
+  // Kanban: if this was the column's last card, fall back to its (now-empty)
+  // header so the cursor stays in the same column (read columnId before mutating).
+  const fallback = ctx === 'kanban' ? app.tasks[id]?.columnId ?? null : null;
+  const next = neighborAfterRemoval(list, id) ?? fallback;
   app.archiveTask(id);
   ui.setSelected(next);
 }
@@ -215,7 +245,10 @@ export function deleteTaskWithCursor(
     ctx === 'kanban'
       ? kanbanColumns(board, app.tasks).find((c) => c.ids.includes(id))?.ids ?? []
       : todoVisibleIds(board, app.tasks);
-  const next = neighborAfterRemoval(list, id);
+  // Kanban: deleting a column's last card lands the cursor on its header (read
+  // columnId BEFORE deleteTask removes the task).
+  const fallback = ctx === 'kanban' ? app.tasks[id]?.columnId ?? null : null;
+  const next = neighborAfterRemoval(list, id) ?? fallback;
   app.deleteTask(id);
   ui.setSelected(next);
 }
@@ -428,7 +461,11 @@ function handleKey(e: KeyboardEvent, route: Route): void {
     if (!ui.selectedId) return;
     e.preventDefault();
     if (ctx === 'home') goBoard(ui.selectedId);
-    else ui.setEditId(ui.selectedId);
+    // A column header has no card to open — Enter adds a card to that column.
+    else if (isKanbanHeader(route, ui.selectedId)) {
+      ui.setNewColumnId(ui.selectedId as ColumnId);
+      ui.setNewOpen(true);
+    } else ui.setEditId(ui.selectedId);
     return;
   }
   if (key.startsWith('Arrow')) {
@@ -458,7 +495,13 @@ function handleKey(e: KeyboardEvent, route: Route): void {
   if (lower === 'n' && e.shiftKey) {
     e.preventDefault();
     if (ctx === 'home') goBoard(useAppStore.getState().createBoard('todo'));
-    else ui.setNewOpen(true);
+    else {
+      // New card inherits the cursor's column (header or card); else first column.
+      if (ctx === 'kanban') {
+        ui.setNewColumnId(currentKanbanColumnId(route, ui.selectedId));
+      }
+      ui.setNewOpen(true);
+    }
     return;
   }
   if (lower === 'a' && e.shiftKey) {
@@ -475,9 +518,11 @@ function handleKey(e: KeyboardEvent, route: Route): void {
     return;
   }
   if (lower === 'd' && e.shiftKey) {
-    // Tasks only (Home board cards own their own confirmed delete). Opens a
-    // confirm dialog — the board view runs deleteTaskWithCursor on confirm.
-    if (ctx === 'home' || !ui.selectedId) return;
+    // Tasks only (Home board cards own their own confirmed delete; a column header
+    // is not deletable here). Opens a confirm dialog — the board view runs
+    // deleteTaskWithCursor on confirm.
+    if (ctx === 'home' || !ui.selectedId || isKanbanHeader(route, ui.selectedId))
+      return;
     e.preventDefault();
     ui.setDeleteId(ui.selectedId);
     return;
@@ -485,15 +530,15 @@ function handleKey(e: KeyboardEvent, route: Route): void {
   // No other shift combo is bound — don't hijack the browser's.
   if (e.shiftKey) return;
 
-  // Selection-scoped actions
+  // Selection-scoped actions (a column header isn't archivable/movable).
   if (lower === 'a') {
-    if (!ui.selectedId) return;
+    if (!ui.selectedId || isKanbanHeader(route, ui.selectedId)) return;
     e.preventDefault();
     archiveSelected(ctx, route, ui.selectedId);
     return;
   }
   if (lower === 'm') {
-    if (!ui.selectedId) return;
+    if (!ui.selectedId || isKanbanHeader(route, ui.selectedId)) return;
     e.preventDefault();
     beginMove(ctx, route, ui.selectedId);
     return;

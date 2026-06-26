@@ -1,5 +1,43 @@
 # Progress
 
+## 2026-06-26 — File sync, read-only task view, time-first reminders, Kanban header nav
+
+### Done
+- **Sync to a file** (Settings → Data): link a JSON file via the **File System Access
+  API** and auto-save the whole dataset to it on every change (debounced; also flushed
+  on tab-hide) — no more re-downloading exports. On link the file is read + compared to
+  the live data with the id/timestamp-independent `fingerprintPayload`/`payloadsEqual`;
+  a real difference raises a banner (file last-saved time + counts) to choose direction —
+  load file → app (`importBoards(..,'replace')`) or overwrite the file. The handle is
+  **in-memory / session-only** (no IndexedDB → re-link after reload); unsupported engines
+  (Firefox/Safari, the `file://` single-file build) fall back to Export. New:
+  `lib/fileSync.ts`, `hooks/useFileSyncWriter.ts`, `components/FileSyncSection.tsx`,
+  `types/file-system-access.d.ts`; pure diff helpers + tests in `lib/transfer.ts`.
+- **Read-only task view**: `TaskDialog` opens **read-only** (title heading, linkified
+  description, status/due/reminder/labels, discussion below). **Shift+E** / the Edit
+  button reveals the live-editing form; **Shift+C** jumps to the comment box (NoteThread
+  gained a `composeRef`). Both shortcuts are modal-local. **Esc** steps out of a focused
+  field first, then closes when nothing is focused; `editMode` resets on close.
+- **Time-first Reminder picker** (`DateTimePicker` `timeFirst`): the popover leads with
+  the time input and hides the calendar behind a date disclosure (the date appears only
+  when clicked); due-date stays calendar-first.
+- **Kanban column headers are keyboard-cursor targets**: each column navigates as the
+  list `[header, ...cards]` — ↑ from the first card selects the header, ←/→ step across
+  headers (even empty columns). **Shift+N** / Enter on a header (and Shift+N on any card)
+  creates the card in the cursor's column (`useUiStore.newColumnId`); archiving/deleting a
+  column's last card lands the cursor on its header. Fixed the first-card focus-ring clip
+  (`p-2` on the column scroller); `KeyboardStatus` announces a selected header.
+
+### Verification
+- `pnpm typecheck` clean · `pnpm lint` (3 pre-existing shadcn warnings) · **116/116 tests**
+  (new `transfer.test.ts`; added dialog/keymap/datetime cases) · `pnpm build` +
+  `pnpm build:single` both pass.
+- Hardened via four adversarial multi-agent reviews: file-sync conflict banner shows the
+  file's last-saved time (counts alone can't disambiguate), serialized writes,
+  picker/error handling, no success-toast on a failed write, stable `useSyncExternalStore`
+  callbacks; `editMode` reset-on-close (no edit-form flash on reopen); column-header
+  screen-reader announcement.
+
 ## 2026-06-25 — App-shell layout (board scroll cleanup)
 
 - Reworked the global layout into a fixed-height **app shell**: `globals.css` now

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   combineDateTime,
+  formatDate,
   isSameDay,
   monthMatrix,
   parseTimeInput,
@@ -52,6 +53,13 @@ describe('time input round-trip', () => {
     expect(parseTimeInput('nope')).toBeNull();
     expect(parseTimeInput('25:00')).toBeNull();
     expect(parseTimeInput('10:75')).toBeNull();
+  });
+});
+
+describe('formatDate', () => {
+  it('renders the day number (locale-robust)', () => {
+    const ts = combineDateTime(new Date(2026, 5, 15), 9, 0);
+    expect(formatDate(ts)).toContain('15');
   });
 });
 

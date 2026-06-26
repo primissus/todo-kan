@@ -70,6 +70,8 @@ export function KanbanView({ boardId }: KanbanViewProps) {
   // Modal flags live in useUiStore so the global keymap can open them directly.
   const newOpen = useUiStore((s) => s.newOpen);
   const setNewOpen = useUiStore((s) => s.setNewOpen);
+  const newColumnId = useUiStore((s) => s.newColumnId);
+  const setNewColumnId = useUiStore((s) => s.setNewColumnId);
   const editId = useUiStore((s) => s.editId);
   const setEditId = useUiStore((s) => s.setEditId);
   const deleteId = useUiStore((s) => s.deleteId);
@@ -79,7 +81,6 @@ export function KanbanView({ boardId }: KanbanViewProps) {
   const columnsOpen = useUiStore((s) => s.kanbanColumnsOpen);
   const setColumnsOpen = useUiStore((s) => s.setKanbanColumnsOpen);
 
-  const [newColumnId, setNewColumnId] = useState<ColumnId | null>(null);
   const [clearOpen, setClearOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
 

@@ -213,6 +213,100 @@ describe('global keymap — kanban horizontal + columns', () => {
   });
 });
 
+describe('global keymap — kanban column headers', () => {
+  it('up on the first card selects the column header', async () => {
+    const { col0, a } = await renderKanban();
+    fireEvent.keyDown(window, { key: 'j' }); // select Alpha (first card)
+    expect(useUiStore.getState().selectedId).toBe(a);
+    fireEvent.keyDown(window, { key: 'k' }); // up → column header
+    expect(useUiStore.getState().selectedId).toBe(col0);
+  });
+
+  it('down on a column header selects its first card', async () => {
+    const { col0, a } = await renderKanban();
+    fireEvent.keyDown(window, { key: 'j' });
+    fireEvent.keyDown(window, { key: 'k' }); // header
+    expect(useUiStore.getState().selectedId).toBe(col0);
+    fireEvent.keyDown(window, { key: 'j' }); // back down → first card
+    expect(useUiStore.getState().selectedId).toBe(a);
+  });
+
+  it('headers navigate left/right across columns, including empty ones', async () => {
+    const { id, col0 } = await renderKanban();
+    const cols = useAppStore.getState().boards[id].columns; // only col0 has cards
+    fireEvent.keyDown(window, { key: 'j' });
+    fireEvent.keyDown(window, { key: 'k' }); // header col0
+    expect(useUiStore.getState().selectedId).toBe(col0);
+    fireEvent.keyDown(window, { key: 'l' }); // → empty col1 header
+    expect(useUiStore.getState().selectedId).toBe(cols[1].id);
+    fireEvent.keyDown(window, { key: 'l' }); // → empty col2 header
+    expect(useUiStore.getState().selectedId).toBe(cols[2].id);
+    fireEvent.keyDown(window, { key: 'h' }); // ← back to col1 header
+    expect(useUiStore.getState().selectedId).toBe(cols[1].id);
+  });
+
+  it('Shift+N targets the cursor’s column (from a card)', async () => {
+    const { id } = await renderKanbanMulti();
+    const cols = useAppStore.getState().boards[id].columns;
+    fireEvent.keyDown(window, { key: 'j' }); // Alpha (col0)
+    fireEvent.keyDown(window, { key: 'l' }); // Gamma (col1)
+    fireEvent.keyDown(window, { key: 'N', shiftKey: true });
+    expect(useUiStore.getState().newOpen).toBe(true);
+    expect(useUiStore.getState().newColumnId).toBe(cols[1].id);
+  });
+
+  it('Shift+N on an empty column header targets that column', async () => {
+    const { id } = await renderKanban();
+    const cols = useAppStore.getState().boards[id].columns;
+    fireEvent.keyDown(window, { key: 'j' });
+    fireEvent.keyDown(window, { key: 'k' }); // header col0
+    fireEvent.keyDown(window, { key: 'l' }); // header col1 (empty)
+    fireEvent.keyDown(window, { key: 'N', shiftKey: true });
+    expect(useUiStore.getState().newColumnId).toBe(cols[1].id);
+  });
+
+  it('a card added via Shift+N on a column lands in that column', async () => {
+    const user = userEvent.setup();
+    const { id } = await renderKanban();
+    const cols = useAppStore.getState().boards[id].columns;
+    fireEvent.keyDown(window, { key: 'j' });
+    fireEvent.keyDown(window, { key: 'k' }); // header col0
+    fireEvent.keyDown(window, { key: 'l' }); // header col1 (empty)
+    fireEvent.keyDown(window, { key: 'N', shiftKey: true });
+
+    const title = await screen.findByLabelText('Title');
+    await user.type(title, 'In col1');
+    await user.click(screen.getByRole('button', { name: 'Add' }));
+
+    await waitFor(() => {
+      const t = Object.values(useAppStore.getState().tasks).find(
+        (x) => x.title === 'In col1',
+      );
+      expect(t?.columnId).toBe(cols[1].id);
+    });
+  });
+
+  it('Enter on a column header opens the new-card form for that column', async () => {
+    const { id } = await renderKanban();
+    const cols = useAppStore.getState().boards[id].columns;
+    fireEvent.keyDown(window, { key: 'j' });
+    fireEvent.keyDown(window, { key: 'k' }); // header col0
+    fireEvent.keyDown(window, { key: 'l' }); // header col1
+    fireEvent.keyDown(window, { key: 'Enter' });
+    expect(useUiStore.getState().newOpen).toBe(true);
+    expect(useUiStore.getState().newColumnId).toBe(cols[1].id);
+  });
+
+  it('archiving the last card in a column lands the cursor on its header', async () => {
+    const { col0, b } = await renderKanban(); // col0 has Alpha, Beta
+    fireEvent.keyDown(window, { key: 'j' }); // Alpha
+    fireEvent.keyDown(window, { key: 'a' }); // archive Alpha → cursor advances to Beta
+    expect(useUiStore.getState().selectedId).toBe(b);
+    fireEvent.keyDown(window, { key: 'a' }); // archive Beta (last) → cursor to header
+    expect(useUiStore.getState().selectedId).toBe(col0);
+  });
+});
+
 describe('global keymap — home', () => {
   it('j selects the first board', async () => {
     const { b } = await renderHome();

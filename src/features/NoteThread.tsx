@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type Ref } from 'react';
 import { MessageSquarePlus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,6 +14,8 @@ export interface NoteThreadProps {
   resetKey?: unknown;
   /** Reports whether there's unsaved draft/edit text, so the host can guard close. */
   onUnsavedChange?: (unsaved: boolean) => void;
+  /** Ref to the "add a note" box so the host can focus it (e.g. Shift+C). */
+  composeRef?: Ref<HTMLTextAreaElement>;
 }
 
 function formatTs(ts: number): string {
@@ -44,7 +46,12 @@ type Pending =
  * descriptions. Extracted from the former standalone NotesDialog so it can live
  * inside the unified TaskDialog.
  */
-export function NoteThread({ taskId, resetKey, onUnsavedChange }: NoteThreadProps) {
+export function NoteThread({
+  taskId,
+  resetKey,
+  onUnsavedChange,
+  composeRef,
+}: NoteThreadProps) {
   const task = useAppStore((s) => s.tasks[taskId]);
   const addNote = useAppStore((s) => s.addNote);
   const editNote = useAppStore((s) => s.editNote);
@@ -220,6 +227,7 @@ export function NoteThread({ taskId, resetKey, onUnsavedChange }: NoteThreadProp
       )}
 
       <Textarea
+        ref={composeRef}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {

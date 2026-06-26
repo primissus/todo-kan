@@ -42,7 +42,8 @@ src/
     datetime.ts                  # pure date/time helpers for the date-time picker
     notifications.ts             # Web Notifications boundary (in-tab reminders)
     linkify.ts                   # pure URL tokenizer (bare URLs → link segments)
-    transfer.ts                  # export/import (+ id re-keying, incl. notes)
+    transfer.ts                  # export/import (+ id re-keying, incl. notes; fingerprint/diff)
+    fileSync.ts                  # File System Access API: link a file + auto-save the dataset to it
     router.ts                    # tiny hash router
     keymap.ts                    # declarative shortcut table (drives the Help dialog)
     hints.ts                     # pure f-hint helpers (generateLabels / collectHintTargets)
@@ -51,12 +52,13 @@ src/
     useAppStore.ts               # persisted Zustand store + ALL domain actions (persist + immer)
     useUiStore.ts                # NON-persisted ephemeral store (selection/move/overlay/modal flags)
     selectors.ts                 # useOrderedBoards / useBoard / useBoardTasks / useAllTasks / useAllTags
-  hooks/                         # useTheme, useDebouncedValue, useGlobalKeymap, useSelection, useReminderScheduler
+  hooks/                         # useTheme, useDebouncedValue, useGlobalKeymap, useSelection, useReminderScheduler, useFileSyncWriter
   components/
     ui/                          # shadcn primitives (CLI-generated) — avoid hand-editing
     AppHeader is inline in App.tsx; SearchBar, SettingsDialog, ThemeControls,
     ConfirmModal, TypeToConfirmModal, TagInput (Floating UI), Tooltip (Floating UI),
     DateTimePicker (dependency-free Popover + calendar + time), ExportDialog, ImportDialog,
+    FileSyncSection (Settings "Sync to a file": link/new/unlink + overwrite-conflict banner),
     CommandPalette (search), HelpDialog (? cheat sheet, mode-aware), HintOverlay (f hints),
     KeyboardStatus (move-mode banner + sr-only selection announcements),
     CommandLine (: command line — Vim-keys toggle + bottom-left mode indicator),
@@ -71,7 +73,7 @@ src/
   styles/ globals.css, theme.css
   test/   setup.ts, store.test.ts, notes.test.ts, render.test.tsx,
           keymap.test.tsx, keymapTable.test.ts, hints.test.ts,
-          linkify.test.ts, datetime.test.ts, uiStore.test.ts
+          linkify.test.ts, datetime.test.ts, uiStore.test.ts, transfer.test.ts
 ```
 
 ## Architecture (read before touching state/UI)
@@ -145,20 +147,49 @@ src/
   `CommandLine`; `:q`↵ toggles `vimEnabled`. **Esc** clears the cursor, then backs
   out to Home from a board. **Shift+D** sets `deleteId` to open a destructive
   confirm; the board views run the exported `deleteTaskWithCursor` on confirm.
-  When adding a shortcut, decide which block it belongs in.
+  When adding a shortcut, decide which block it belongs in. **Kanban column headers
+  are cursor targets** — `selectKanban` treats each column as `[header, ...cards]`,
+  so ↑ from the first card selects the header and ←/→ step across column headers
+  (even empty ones); `selectedId` may then be a column id (header actions like
+  `a`/`m`/Shift+D are guarded off). **Shift+N**/**Enter** on a header (and Shift+N
+  on any card) opens the create form for the cursor's column via
+  `useUiStore.newColumnId`.
 - **Task dialog & scheduling.** Opening a task (Enter / clicking the card / its open
-  button) shows `features/TaskDialog.tsx` — a unified view/edit modal whose fields
-  **commit live** to the store (no Save/Discard) with `features/NoteThread.tsx`
-  embedded for the discussion. Creating a task still uses the buffered
-  `TaskFormDialog`. Due date + reminder use `components/DateTimePicker.tsx`, a
-  **dependency-free** shadcn-style Popover/calendar/time picker (pure math in
-  `lib/datetime.ts`) — do NOT add react-day-picker/date-fns; the hand-rolled grid
-  keeps the single-file build a single chunk. Reminders fire through the in-tab
+  button) shows `features/TaskDialog.tsx` — a view/edit modal that opens **read-only**
+  (title heading, linkified description, status/due/reminder/labels, and the
+  `features/NoteThread.tsx` discussion below). **Shift+E** / the Edit button reveal
+  the form, whose fields **commit live** to the store (no Save/Discard); **Shift+C**
+  focuses the comment box (via NoteThread's `composeRef`). Those two shortcuts are
+  modal-local (`onKeyDown` on `DialogContent`, guarded while typing) — the global
+  keymap bails inside dialogs, so they live here, not in `useGlobalKeymap`/`keymap.ts`.
+  **Esc** steps out of a focused field first (blurs to the `contentRef`, nothing is
+  lost — fields auto-save) and only closes on a second Esc with no field focused;
+  `editMode` resets when the dialog **closes**. Creating a
+  task still uses the buffered `TaskFormDialog`. Due date + reminder use
+  `components/DateTimePicker.tsx`, a **dependency-free** shadcn-style
+  Popover/calendar/time picker (pure math in `lib/datetime.ts`) — do NOT add
+  react-day-picker/date-fns; the hand-rolled grid keeps the single-file build a single
+  chunk. Due date is calendar-first; the Reminder picker uses **`timeFirst`** (time
+  input leads, calendar hidden behind a date disclosure). Reminders fire through the in-tab
   **Web Notifications API** only (`lib/notifications.ts` + `hooks/useReminderScheduler.ts`,
   mounted in `App`): no Service Worker / Push (they need https and can't run from
   `file://`), so reminders only fire while the tab is open but work in BOTH builds.
   The on/off pref is its own `todokan:notifications-enabled` localStorage key (like
   the theme/vim prefs), never the persisted blob.
+- **Sync to a file** (`lib/fileSync.ts` + `hooks/useFileSyncWriter.ts`, mounted in
+  `App`; UI in `components/FileSyncSection.tsx`, Settings → Data). Links one JSON
+  file via the **File System Access API** and auto-saves the whole dataset to it
+  (debounced) on every change — so the user stops re-downloading exports. The file
+  handle is **in-memory / session-only**: persisting it would need IndexedDB
+  (handles aren't JSON-serializable), which we avoid — so the link drops on reload
+  and the user re-links once. `isFileSyncSupported()` is false on Firefox/Safari
+  and the **`file://` single-file build** (the API needs a secure non-`file://`
+  origin); there the section just points back to Export. On link the file is read +
+  compared to the live data with the id/timestamp-independent `fingerprintPayload`/
+  `payloadsEqual` (`lib/transfer.ts`); a real difference raises a banner to choose
+  direction — *load file → app* (`importBoards(payload, 'replace')`) or *overwrite
+  the file with app data*. Writes are serialized through one promise chain so a
+  manual "Save now" and the debounced auto-save never open two writables at once.
 - **Home search** (`features/HomePage.tsx`) spans lists AND tasks; `parseQuery`
   (`lib/search.ts`) reads a leading `type:task`/`type:list` filter plus the `#tag`
   prefix. Results are navigated inline (↑/↓/Enter while the search box is focused);
@@ -183,7 +214,8 @@ src/
    Do **not** downgrade to React 18; refs to Button/Dialog/etc. would silently break.
 2. **localStorage, not IndexedDB** — keeps the single-file `file://` build working.
    If you change the store engine, keep the `lib/storage.ts` boundary and re-verify
-   `file://`.
+   `file://`. (File sync deliberately keeps its file handle in memory only for the
+   same reason — don't reach for IndexedDB to persist it across reloads.)
 3. **Single-file build needs one JS chunk** — no `React.lazy()` / dynamic
    `import()` in feature code, or `vite-plugin-singlefile` can't inline it.
 4. **Theme prefs are NOT in the Zustand blob** — they're separate localStorage

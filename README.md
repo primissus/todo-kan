@@ -10,8 +10,13 @@ a **single HTML file** you can open by double-clicking.
 - 🔍 **Search** across title, description, and tags — or type `#tag` to search tags only.
 - 🧲 **Drag and drop** to reorder tasks, and to move Kanban cards between columns.
 - 🗃️ **Archive** whole lists/boards or individual tasks — and bring them back.
-- 🎨 **Themes** (Default / Gruvbox / Nord) with **light / dark / system** appearance.
+- ⏰ **Due dates & reminders** with in-tab browser notifications.
+- 💬 **Discussion threads** on any task, with linkified notes and descriptions.
+- ⌨️ **Keyboard navigation** — an optional Vim-style cursor (j/k/h/l), `?` for the cheat sheet.
+- 🎨 **Themes** (Default / Gruvbox / Nord …) with **light / dark / system** appearance.
 - 💾 **Export / import** your data as JSON (pick exactly which lists to export).
+- 🔗 **Sync to a file** — link a JSON file once and it auto-saves on every change
+  (Chromium browsers; falls back to Export elsewhere).
 - 🪶 Builds to a **single, self-contained HTML file** that works offline from `file://`.
 
 ## Quick start
@@ -34,13 +39,18 @@ browser — your data is saved locally in that browser.
 ## How to use
 
 - **New** (top right of the home page) → create a TODO list or a Kanban board.
-- Click a card to open it. The title, description, and tags are editable inline.
+- Click a card to open it. It opens **read-only** (with rendered links and the
+  discussion thread); press **Edit** (or **Shift+E**) to change the title,
+  description, status, due date, reminder, and labels. **Shift+C** jumps to the
+  comment box.
 - **TODO**: add tasks, check them off, hide/show completed, drag to reorder,
   archive what you’re done with. "Clear" wipes the list (type `clear` to confirm).
 - **Kanban**: configure columns (default *Pending / In Progress / Review / Done*),
-  add cards, drag them within and across columns, "Archive done" in one click.
-- **Settings** (gear, top right): theme & appearance, export, import, and a guarded
-  "Clear all" (type `delete all tasks`).
+  add cards, drag them within and across columns, "Archive done" in one click. With
+  keyboard nav, the column headers are cursor targets too — ↑ from the first card,
+  ←/→ across columns — and a new card inherits the column you’re on.
+- **Settings** (gear, top right): theme & appearance, reminders, export, import,
+  **sync to a file**, and a guarded "Clear all" (type `delete all tasks`).
 
 ## Tech
 

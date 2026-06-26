@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '@/App';
 import { TodoView } from '@/features/todo/TodoView';
@@ -132,8 +132,8 @@ describe('TodoView', () => {
   });
 });
 
-describe('TaskDialog (unified view/edit + discussion)', () => {
-  it('opens from the row and live-edits the title', async () => {
+describe('TaskDialog (read-only view → edit + discussion)', () => {
+  it('opens read-only (no form), then live-edits the title via Edit', async () => {
     const user = userEvent.setup();
     const id = useAppStore.getState().createBoard('todo');
     const t = useAppStore.getState().addTask(id, { title: 'Original' });
@@ -141,14 +141,72 @@ describe('TaskDialog (unified view/edit + discussion)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Open task' }));
 
-    // The unified dialog shows the scheduling fields and the discussion thread.
-    expect(await screen.findByText('Due date')).toBeInTheDocument();
+    // Read-only by default: the title shows as a heading and the discussion is
+    // present, but there is no editable Title field yet.
+    expect(
+      await screen.findByRole('heading', { name: 'Original' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Discussion')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Title')).toBeNull();
 
-    const titleInput = screen.getByLabelText('Title');
+    // Edit reveals the form; fields commit live.
+    await user.click(screen.getByRole('button', { name: /Edit/ }));
+    const titleInput = await screen.findByLabelText('Title');
     await user.clear(titleInput);
     await user.type(titleInput, 'Renamed');
     expect(useAppStore.getState().tasks[t].title).toBe('Renamed');
+  });
+
+  it('Shift+E enters edit mode', async () => {
+    const user = userEvent.setup();
+    const id = useAppStore.getState().createBoard('todo');
+    useAppStore.getState().addTask(id, { title: 'Original' });
+    render(<TodoView boardId={id} />);
+
+    await user.click(screen.getByRole('button', { name: 'Open task' }));
+    await screen.findByRole('heading', { name: 'Original' });
+    expect(screen.queryByLabelText('Title')).toBeNull();
+
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'E', shiftKey: true });
+    expect(await screen.findByLabelText('Title')).toBeInTheDocument();
+  });
+
+  it('Shift+C focuses the comment box', async () => {
+    const user = userEvent.setup();
+    const id = useAppStore.getState().createBoard('todo');
+    useAppStore.getState().addTask(id, { title: 'Original' });
+    render(<TodoView boardId={id} />);
+
+    await user.click(screen.getByRole('button', { name: 'Open task' }));
+    await screen.findByRole('heading', { name: 'Original' });
+
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'C', shiftKey: true });
+    expect(screen.getByLabelText('Add a note')).toHaveFocus();
+  });
+
+  it('Esc steps out of a focused field first, then closes', async () => {
+    const user = userEvent.setup();
+    const id = useAppStore.getState().createBoard('todo');
+    useAppStore.getState().addTask(id, { title: 'Original' });
+    render(<TodoView boardId={id} />);
+
+    await user.click(screen.getByRole('button', { name: 'Open task' }));
+    await screen.findByRole('heading', { name: 'Original' });
+
+    // Enter edit mode and focus the title field.
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'E', shiftKey: true });
+    const title = await screen.findByLabelText('Title');
+    title.focus();
+    expect(title).toHaveFocus();
+
+    // First Esc: field loses focus, dialog stays open.
+    fireEvent.keyDown(title, { key: 'Escape' });
+    expect(screen.getByLabelText('Title')).toBeInTheDocument();
+    expect(title).not.toHaveFocus();
+
+    // Second Esc (nothing focused): dialog closes.
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByLabelText('Title')).toBeNull());
   });
 });
 
