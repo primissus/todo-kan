@@ -118,5 +118,12 @@ Settings footer.
 
 ## Verification
 
-`pnpm test` (vitest) — store-logic suite + jsdom render/interaction. Also driven
-end-to-end in real headless Chromium against the single-file `file://` build.
+`pnpm test` (vitest) — store-logic suite + jsdom render/interaction — is the
+automated gate, run alongside `pnpm typecheck`, `pnpm lint`, `pnpm build`, and
+`pnpm build:single`. The jsdom render tests mount the real views, so component
+behavior is covered without a browser.
+
+Browser/visual verification (loading the single-file `file://` build and clicking
+through it, screenshots) is a **manual** step performed by a human in a real
+browser — it is **not** part of the automated flow and is **not** expected of
+automated agents, whose sandboxes typically can't run a browser.

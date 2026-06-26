@@ -180,7 +180,13 @@ src/
   tokenizer; `hints.test.ts` + `uiStore.test.ts` cover the pure/ephemeral pieces.
 - After UI/logic changes, run `pnpm typecheck && pnpm lint && pnpm test`, then
   `pnpm build` and `pnpm build:single`. Note `tsc -b` type-checks the test files
-  too — a green `vitest` run is not enough on its own.
+  too — a green `vitest` run is not enough on its own. That is the full automated
+  gate; the jsdom render tests mount the real views, so component behavior is
+  covered without a browser.
+- **Browser/visual verification is manual** — loading the `file://` single-file
+  build and clicking through it (or taking screenshots) is a human step in a real
+  browser. It is not part of the automated gate and is not expected of agents
+  (sandboxes usually can't launch a browser); rely on the render tests instead.
 
 ## Hard rules
 
