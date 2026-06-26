@@ -187,7 +187,7 @@ describe('TaskDialog (read-only view → edit + discussion)', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
-  it('Esc in the edit form prompts to discard a dirty draft, then reverts', async () => {
+  it('Esc steps out of the edit field first, then prompts to discard a dirty draft', async () => {
     const user = userEvent.setup();
     const id = useAppStore.getState().createBoard('todo');
     const t = useAppStore.getState().addTask(id, { title: 'Original' });
@@ -197,14 +197,41 @@ describe('TaskDialog (read-only view → edit + discussion)', () => {
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'E', shiftKey: true });
     const titleInput = await screen.findByLabelText('Title');
     await user.type(titleInput, ' edited');
+    titleInput.focus();
 
-    // Esc with a dirty draft → discard confirm.
+    // First Esc: blurs the field — no discard modal yet.
     fireEvent.keyDown(titleInput, { key: 'Escape' });
+    expect(titleInput).not.toHaveFocus();
+    expect(screen.queryByText('Discard changes?')).toBeNull();
+    expect(screen.getByLabelText('Title')).toBeInTheDocument();
+
+    // Second Esc (no field focused): dirty draft → discard confirm.
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
     expect(await screen.findByText('Discard changes?')).toBeInTheDocument();
 
     // Confirm discard → reverts to read-only; the store was never touched.
     await user.click(screen.getByRole('button', { name: 'Discard' }));
     expect(useAppStore.getState().tasks[t].title).toBe('Original');
+    await waitFor(() => expect(screen.queryByLabelText('Title')).toBeNull());
+    expect(screen.getByRole('heading', { name: 'Original' })).toBeInTheDocument();
+  });
+
+  it('Esc twice on a clean draft returns to read-only with no discard prompt', async () => {
+    const user = userEvent.setup();
+    const id = useAppStore.getState().createBoard('todo');
+    useAppStore.getState().addTask(id, { title: 'Original' });
+    render(<TodoView boardId={id} />);
+
+    await user.click(screen.getByRole('button', { name: 'Open task' }));
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'E', shiftKey: true });
+    const titleInput = await screen.findByLabelText('Title');
+    titleInput.focus();
+
+    // First Esc blurs the field; second Esc cancels the (clean) edit — no modal.
+    fireEvent.keyDown(titleInput, { key: 'Escape' });
+    expect(titleInput).not.toHaveFocus();
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(screen.queryByText('Discard changes?')).toBeNull();
     await waitFor(() => expect(screen.queryByLabelText('Title')).toBeNull());
     expect(screen.getByRole('heading', { name: 'Original' })).toBeInTheDocument();
   });

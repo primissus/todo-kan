@@ -241,17 +241,10 @@ export function TaskDialog({
         className="sm:max-w-lg"
         onKeyDown={onShortcut}
         onEscapeKeyDown={(e) => {
-          // In the edit form, Esc cancels editing: prompt to discard when the
-          // draft is dirty, otherwise drop straight back to the read-only view.
-          if (editMode) {
-            e.preventDefault();
-            if (isDirty) setConfirmCancelEdit(true);
-            else cancelEdit();
-            return;
-          }
-          // Read-only: Esc "steps out" of a focused field first (without closing —
-          // the live Status/Reminder controls auto-save, so nothing is lost); it
-          // only closes when no field is focused (a second Esc, after focus moved).
+          // Esc "steps out" of a focused field first — in BOTH views — so the
+          // first Esc never closes or discards; it just blurs to the content
+          // (the live read-only controls and the buffered edit draft both survive
+          // a blur). A second Esc, with no field focused, then acts on the view.
           const ae = document.activeElement as HTMLElement | null;
           const inField =
             !!ae &&
@@ -263,6 +256,15 @@ export function TaskDialog({
           if (inField) {
             e.preventDefault();
             contentRef.current?.focus();
+            return;
+          }
+          // No field focused → the edit form cancels (discard-confirm when the
+          // draft is dirty, else back to read-only); the read-only view falls
+          // through so Radix closes the dialog.
+          if (editMode) {
+            e.preventDefault();
+            if (isDirty) setConfirmCancelEdit(true);
+            else cancelEdit();
           }
         }}
       >

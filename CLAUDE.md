@@ -92,11 +92,10 @@ After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and
   `Controller` for the Select/pickers/`TagInput`): edits stay provisional and only
   **commit to the store on save** — the **Done editing** button or **⌘/Ctrl+Enter**
   (both call `saveEdit = form.handleSubmit(...)`). Entering edit `reset()`s the form
-  from a `snapshotOf(task)`; `formState.isDirty` gates the discard prompts.
-  **Escape in the edit form cancels it** → a "Discard changes?" confirm when the
-  draft is dirty (else straight back to read-only); the reminder asks for
-  notification permission on **save** (not on each keystroke). **Shift+C** focuses
-  the comment box (NoteThread exposes a `composeRef`). **⌘/Ctrl+Enter** is
+  from a `snapshotOf(task)`; `formState.isDirty` gates the discard prompts. The
+  reminder asks for notification permission on **save** (not on each keystroke).
+  **Shift+C** focuses the comment box (NoteThread exposes a `composeRef`).
+  **⌘/Ctrl+Enter** is
   contextual — it **saves the draft** in edit mode and **closes** in read-only
   (skipped when a child already handled the chord, e.g. the note box submitting a
   comment via `e.defaultPrevented`). These
@@ -104,11 +103,14 @@ After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and
   `DialogContent`, guarded against firing while typing) — NOT in `useGlobalKeymap`
   and NOT in the `keymap.ts` cheat sheet (only `f` hint mode reaches in from the
   global keymap).
-  In the **read-only** view **Escape** first *steps out* of a focused field
-  (`onEscapeKeyDown` blurs it by focusing the `contentRef`; the live Status/Reminder
-  controls auto-save, so nothing is lost) and only **closes** on a second Escape
-  with no field focused. Closing while editing a dirty draft (the **X** / overlay)
-  prompts the same discard confirm (`requestClose` checks `editMode && isDirty`).
+  **Escape** is a two-step back-out in **both** views: the first Esc *steps out* of
+  a focused field (`onEscapeKeyDown` blurs it to the `contentRef` — the live
+  read-only controls and the buffered edit draft both survive a blur), and only a
+  **second** Esc, with no field focused, acts on the view: **read-only closes**,
+  while the **edit form cancels** — a "Discard changes?" confirm when the draft is
+  dirty, else straight back to read-only. Closing while editing a dirty draft (the
+  **X** / overlay) prompts the same discard confirm (`requestClose` checks
+  `editMode && isDirty`).
   "Done editing" → save → read-only; "Done" → close. **Create** still uses the
   buffered `src/features/TaskFormDialog.tsx` (Add button). There is no separate
   notes dialog or `notesId` anymore.

@@ -172,20 +172,22 @@ src/
   and commit ONLY on save — the **Done editing** button or **⌘/Ctrl+Enter** (both
   call `saveEdit = handleSubmit(...)`, which `editTask`s then drops back to
   read-only). Entering edit `reset()`s the form from `snapshotOf(task)`;
-  `formState.isDirty` gates discard prompts. **Esc in the edit form cancels it** —
-  "Discard changes?" confirm when dirty, else straight back to read-only — and the
-  reminder requests notification permission on **save**, not per keystroke.
+  `formState.isDirty` gates discard prompts. The reminder requests notification
+  permission on **save**, not per keystroke.
   **Shift+C** focuses the comment box (via NoteThread's `composeRef`).
   **⌘/Ctrl+Enter** is contextual: **save** in edit mode, **close** in read-only
   (skipped via `e.defaultPrevented` when a child note box submits a comment on the
   same chord). These modal-local shortcuts (`onKeyDown` on `DialogContent`, guarded
   while typing) live here, not in `useGlobalKeymap`/`keymap.ts` — only `f` hint mode
   reaches in (the overlay scopes its labels to the open dialog).
-  In the **read-only** view **Esc** steps out of a focused field first (blurs to the
-  `contentRef`; the live Status/Reminder controls auto-save, so nothing is lost) and
-  only closes on a second Esc with no field focused; closing while editing a dirty
-  draft (X / overlay) prompts the same discard confirm (`requestClose` checks
-  `editMode && isDirty`). `editMode` resets when the dialog **closes**. Creating a
+  **Esc** is a two-step back-out in **both** views: the first Esc steps out of a
+  focused field (blurs to the `contentRef` — the live read-only controls and the
+  buffered edit draft both survive a blur), and only a **second** Esc, with no field
+  focused, acts on the view — **read-only closes**, the **edit form cancels**
+  ("Discard changes?" confirm when dirty, else back to read-only). Closing while
+  editing a dirty draft (X / overlay) prompts the same discard confirm
+  (`requestClose` checks `editMode && isDirty`). `editMode` resets when the dialog
+  **closes**. Creating a
   task still uses the buffered `TaskFormDialog`. Due date + reminder use
   `components/DateTimePicker.tsx`, a **dependency-free** shadcn-style
   Popover/calendar/time picker (pure math in `lib/datetime.ts`) — do NOT add
