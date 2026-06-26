@@ -130,7 +130,18 @@ export function KanbanView({ boardId }: KanbanViewProps) {
   };
 
   return (
-    <div>
+    /*
+     * Hybrid layout. The <html>/app frame never scrolls (see App.tsx shell +
+     * globals.css `html { overflow: hidden }`); the scrollable <main> owns the
+     * vertical scroll. On mobile this view flows at natural height, so <main>
+     * scrolls the whole board (header + columns) like a normal page. On md+ the
+     * view fills <main> exactly (`md:h-full`): the board header is fixed height
+     * and the columns region (flex-1) takes the rest and scrolls HORIZONTALLY,
+     * landing its scrollbar at the viewport bottom. Vertical task overflow then
+     * scrolls inside each column. No magic numbers — heights come from flex.
+     */
+    <div className="flex flex-col md:h-full md:min-h-0">
+      <div className="mx-auto w-full max-w-6xl shrink-0 px-4 pt-6">
       <BoardHeader board={board}>
         <Button
           size="sm"
@@ -175,7 +186,8 @@ export function KanbanView({ boardId }: KanbanViewProps) {
           <Eraser className="size-4" />
           Clear
         </Button>
-      </BoardHeader>
+        </BoardHeader>
+      </div>
 
       <DndContext
         sensors={sensors}
@@ -186,15 +198,15 @@ export function KanbanView({ boardId }: KanbanViewProps) {
         onDragCancel={() => setActiveId(null)}
       >
         {/*
-         * Mobile: columns stack vertically (full width). md+: full-bleed
-         * horizontal scroller — `mx-[calc(50%-50vw)]` breaks out of <main>'s
-         * max-w-6xl container to span the whole viewport, with px padding so
-         * cards aren't flush to the edges. The inner `w-max mx-auto` track
-         * centers the columns when they fit and collapses its margins (no
-         * edge clipping, padding preserved) when they overflow and scroll.
+         * Mobile: columns stack vertically and flow with the page (<main>
+         * scrolls). md+: this region takes <main>'s full width and remaining
+         * height (flex-1) and scrolls HORIZONTALLY only — its scrollbar sits at
+         * the viewport bottom. The inner `h-full w-max mx-auto` track fills the
+         * height (so columns scroll their tasks internally) and centers the
+         * columns when they fit.
          */}
-        <div className="pb-4 md:mx-[calc(50%-50vw)] md:overflow-x-auto md:px-[20vw]">
-          <div className="flex flex-col gap-3 md:w-max md:flex-row md:mx-auto">
+        <div className="px-4 pb-4 md:min-h-0 md:flex-1 md:overflow-x-auto md:overflow-y-hidden md:px-8 md:pb-0">
+          <div className="flex flex-col gap-3 md:mx-auto md:h-full md:w-max md:flex-row">
             {board.columns
               .slice()
               .sort((a, b) => a.order - b.order)

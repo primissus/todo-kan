@@ -36,6 +36,15 @@ After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and
 - **Theme**: families × light/dark are `[data-theme]` blocks setting shadcn tokens;
   `dark:` keyed off `[data-mode="dark"]`. Theme prefs are separate localStorage keys
   read by the FOUC script in `index.html` (not in the Zustand blob).
+- **App-shell layout**: the `<html>` frame never scrolls (`globals.css`
+  `html { overflow: hidden }`); `App` is a fixed-height `h-dvh` flex column and
+  the only document-style scroll lives on **`<main>`** (`flex-1 min-h-0
+  overflow-y-auto`). Home/TODO scroll inside a centered `max-w-6xl` wrapper. The
+  Kanban board fills `<main>` on md+ (`md:h-full`): board header fixed, the
+  columns region scrolls **horizontally only** (scrollbar pinned to viewport
+  bottom), and **vertical task overflow scrolls inside each `Column`**. Mobile:
+  board flows naturally and `<main>` scrolls it. Heights are flex-derived — no
+  `calc()`/magic numbers.
 - **Kanban DnD**: order lives in `taskIds` (filtered per column); the primitive is
   `moveTaskToColumn(taskId, columnId, beforeTaskId|null)`. "Done" column = `isDone` flag.
 - **Task notes**: each task carries a `notes: Note[]` thread (store actions

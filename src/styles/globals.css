@@ -46,6 +46,8 @@
   }
   html {
     color-scheme: light dark;
+    /* App-shell frame never scrolls; scrolling is owned by <main> (see App.tsx). */
+    overflow: hidden;
   }
   body {
     @apply bg-background text-foreground;

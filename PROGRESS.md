@@ -1,5 +1,22 @@
 # Progress
 
+## 2026-06-25 — App-shell layout (board scroll cleanup)
+
+- Reworked the global layout into a fixed-height **app shell**: `globals.css` now
+  sets `html { overflow: hidden }`, `App` is an `h-dvh` flex column with a
+  `shrink-0` header, and the single document-style scroll lives on `<main>`
+  (`flex-1 min-h-0 overflow-y-auto`).
+- **Kanban**: the board fills `<main>` on md+ (`md:h-full`). The board header is
+  fixed height and the columns region scrolls **horizontally only**, so the
+  horizontal scrollbar is pinned to the viewport bottom regardless of card count;
+  **vertical task overflow scrolls inside each column** (`Column` list is
+  `md:overflow-y-auto`). On mobile the board flows at natural height and `<main>`
+  scrolls it. Removed the old `px-[20vw]` full-bleed padding and the negative-margin
+  breakout — `<main>` is full-width and the board header re-centers with
+  `mx-auto max-w-6xl`. Heights are flex-derived — no `calc()`/magic numbers.
+- Verified: `pnpm typecheck` clean · `pnpm lint` (3 pre-existing shadcn warnings) ·
+  **83/83 tests** · `pnpm build` + `pnpm build:single` pass.
+
 ## 2026-06-26 — Links in descriptions + task note threads
 
 - **Linkify**: bare URLs (`http(s)://`, `www.`) in task descriptions now render as

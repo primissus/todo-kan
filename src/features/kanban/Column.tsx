@@ -20,8 +20,8 @@ export function Column({ column, tasks, onAdd, onEditTask }: ColumnProps) {
   });
 
   return (
-    <div className="flex w-full flex-col rounded-lg bg-muted/40 md:w-[clamp(288px,22vw,500px)] md:shrink-0">
-      <div className="flex items-center gap-2 px-3 py-2.5">
+    <div className="flex w-full flex-col rounded-lg bg-muted/40 md:h-full md:min-h-0 md:w-[clamp(288px,22vw,500px)] md:shrink-0">
+      <div className="flex shrink-0 items-center gap-2 px-3 py-2.5">
         <h3 className="text-sm font-semibold">{column.title}</h3>
         <span className="rounded bg-muted px-1.5 text-xs text-muted-foreground">
           {tasks.length}
@@ -41,7 +41,7 @@ export function Column({ column, tasks, onAdd, onEditTask }: ColumnProps) {
       <div
         ref={setNodeRef}
         className={cn(
-          'flex min-h-24 flex-1 flex-col gap-2 px-2 pb-2 transition-colors',
+          'flex min-h-24 flex-1 flex-col gap-2 px-2 pb-2 transition-colors md:min-h-0 md:overflow-y-auto',
           isOver && 'bg-accent/40',
         )}
       >

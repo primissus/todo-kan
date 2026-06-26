@@ -88,6 +88,20 @@ src/
 - **`archived` is an orthogonal boolean** on each task — independent of
   `completed` (todo) and `columnId` (kanban). Never fold archived into a status
   enum (you'd lose the column to restore on unarchive).
+- **App-shell layout (the frame never scrolls).** `globals.css` sets
+  `html { overflow: hidden }`; `App` is a fixed-height `h-dvh` flex column
+  (header is `shrink-0`, always visible). The single document-style scroll lives
+  on **`<main>`** (`flex-1 min-h-0 overflow-y-auto`). Home/TODO render inside a
+  centered `max-w-6xl` wrapper that scrolls vertically. The **Kanban board fills
+  `<main>` on md+ (`md:h-full`)**: its board header is fixed height and the
+  columns region (`flex-1 min-h-0 md:overflow-x-auto md:overflow-y-hidden`)
+  scrolls **horizontally only**, so its scrollbar is pinned to the viewport
+  bottom; vertical task overflow scrolls **inside each column**
+  (`Column`'s list is `md:h-full md:min-h-0 md:overflow-y-auto`). On mobile the
+  board flows at natural height and `<main>` scrolls the whole thing. Heights
+  come from the flex chain — **no `calc()`/magic numbers** and no full-bleed
+  negative-margin hack (`<main>` is full-width; the board header re-centers
+  itself with `mx-auto max-w-6xl`).
 - **Two stores, on purpose.** `useAppStore` is the persisted domain model.
   `useUiStore` is a separate, **non-persisted** store for ephemeral
   keyboard-navigation state: the selection cursor (`selectedId`), move-mode

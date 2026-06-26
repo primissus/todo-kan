@@ -34,8 +34,8 @@ export default function App() {
   }, [route, board]);
 
   return (
-    <div className="min-h-dvh bg-background text-foreground">
-      <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
+      <header className="shrink-0 border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto flex h-14 w-full max-w-6xl items-center gap-3 px-4">
           <button
             type="button"
@@ -65,10 +65,24 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl px-4 py-6">
-        {route.name === 'home' && <HomePage />}
+      {/*
+       * App-shell: root is a fixed-height (h-dvh) flex column and the <html>
+       * frame never scrolls (globals.css). <main> owns the only document-style
+       * scroll. Home/TODO live in a centered max-w-6xl wrapper that scrolls
+       * vertically; the Kanban board fills <main> (md:h-full) so it never
+       * produces a stray document scrollbar and keeps its horizontal scrollbar
+       * pinned to the viewport bottom.
+       */}
+      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        {route.name === 'home' && (
+          <div className="mx-auto w-full max-w-6xl px-4 py-6">
+            <HomePage />
+          </div>
+        )}
         {route.name === 'board' && board?.type === 'todo' && (
-          <TodoView boardId={board.id} />
+          <div className="mx-auto w-full max-w-6xl px-4 py-6">
+            <TodoView boardId={board.id} />
+          </div>
         )}
         {route.name === 'board' && board?.type === 'kanban' && (
           <KanbanView boardId={board.id} />
