@@ -44,7 +44,11 @@ After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and
   columns region scrolls **horizontally only** (scrollbar pinned to viewport
   bottom), and **vertical task overflow scrolls inside each `Column`**. Mobile:
   board flows naturally and `<main>` scrolls it. Heights are flex-derived — no
-  `calc()`/magic numbers.
+  `calc()`/magic numbers. The fit-to-viewport pane is gated by a **`tall`**
+  height variant (`@media (min-height: 640px)`, with `short` inverse, in
+  `globals.css`): on short/landscape viewports the board flows at natural height
+  (columns get `short:md:min-h-[420px]`) instead of being crushed. Put new
+  fit-to-height classes on `tall:`, not bare `md:`.
 - **Kanban DnD**: order lives in `taskIds` (filtered per column); the primitive is
   `moveTaskToColumn(taskId, columnId, beforeTaskId|null)`. "Done" column = `isDone` flag.
 - **Task notes**: each task carries a `notes: Note[]` thread (store actions

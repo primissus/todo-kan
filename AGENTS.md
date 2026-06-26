@@ -97,11 +97,19 @@ src/
   columns region (`flex-1 min-h-0 md:overflow-x-auto md:overflow-y-hidden`)
   scrolls **horizontally only**, so its scrollbar is pinned to the viewport
   bottom; vertical task overflow scrolls **inside each column**
-  (`Column`'s list is `md:h-full md:min-h-0 md:overflow-y-auto`). On mobile the
+  (`Column`'s list is `tall:md:min-h-0 tall:md:overflow-y-auto`). On mobile the
   board flows at natural height and `<main>` scrolls the whole thing. Heights
   come from the flex chain — **no `calc()`/magic numbers** and no full-bleed
   negative-margin hack (`<main>` is full-width; the board header re-centers
   itself with `mx-auto max-w-6xl`).
+- **The fit-to-viewport pane is gated by a `tall` height variant** (`@custom-variant
+  tall (@media (min-height: 640px))` in `globals.css`, plus its `short` inverse).
+  The pane behavior is `tall:md:*` — so on **short/landscape viewports** (e.g. a
+  phone rotated to landscape, height < 640px) the board does NOT try to fit;
+  columns get `short:md:min-h-[420px]`, the board flows at natural height, and
+  `<main>` scrolls it. Without this, a short viewport crushes the columns into a
+  sliver under the board header. Keep new fit-to-height classes on the `tall:`
+  variant, not bare `md:`.
 - **Two stores, on purpose.** `useAppStore` is the persisted domain model.
   `useUiStore` is a separate, **non-persisted** store for ephemeral
   keyboard-navigation state: the selection cursor (`selectedId`), move-mode

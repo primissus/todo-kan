@@ -10,6 +10,15 @@
 @custom-variant dark (&:where([data-mode='dark'], [data-mode='dark'] *));
 
 /*
+ * Viewport-height variants. The Kanban board only fits-to-viewport + scrolls its
+ * columns internally when there's enough vertical room (`tall`). On short/landscape
+ * viewports (`short`) the board instead flows at natural height — columns get a
+ * min-height and <main> scrolls the whole thing — so the header doesn't crush them.
+ */
+@custom-variant tall (@media (min-height: 640px));
+@custom-variant short (@media (max-height: 639px));
+
+/*
  * Map our semantic CSS variables to Tailwind utility tokens. `inline` resolves
  * each var at use-site, so utilities track whichever [data-theme] block is live.
  */

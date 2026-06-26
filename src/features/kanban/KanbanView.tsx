@@ -134,13 +134,16 @@ export function KanbanView({ boardId }: KanbanViewProps) {
      * Hybrid layout. The <html>/app frame never scrolls (see App.tsx shell +
      * globals.css `html { overflow: hidden }`); the scrollable <main> owns the
      * vertical scroll. On mobile this view flows at natural height, so <main>
-     * scrolls the whole board (header + columns) like a normal page. On md+ the
-     * view fills <main> exactly (`md:h-full`): the board header is fixed height
-     * and the columns region (flex-1) takes the rest and scrolls HORIZONTALLY,
-     * landing its scrollbar at the viewport bottom. Vertical task overflow then
-     * scrolls inside each column. No magic numbers — heights come from flex.
+     * scrolls the whole board (header + columns) like a normal page. On md+ AND
+     * a tall-enough viewport the view fills <main> exactly (`tall:md:h-full`):
+     * the board header is fixed height and the columns region (flex-1) takes the
+     * rest and scrolls HORIZONTALLY, landing its scrollbar at the viewport
+     * bottom, while vertical task overflow scrolls inside each column. On short
+     * viewports (landscape phones) the pane behavior is dropped — the board
+     * flows naturally and <main> scrolls it (see the `tall`/`short` variants in
+     * globals.css). No magic numbers — heights come from flex.
      */
-    <div className="flex flex-col md:h-full md:min-h-0">
+    <div className="flex flex-col tall:md:h-full tall:md:min-h-0">
       <div className="mx-auto w-full max-w-6xl shrink-0 px-4 pt-6">
       <BoardHeader board={board}>
         <Button
@@ -199,14 +202,16 @@ export function KanbanView({ boardId }: KanbanViewProps) {
       >
         {/*
          * Mobile: columns stack vertically and flow with the page (<main>
-         * scrolls). md+: this region takes <main>'s full width and remaining
-         * height (flex-1) and scrolls HORIZONTALLY only — its scrollbar sits at
-         * the viewport bottom. The inner `h-full w-max mx-auto` track fills the
-         * height (so columns scroll their tasks internally) and centers the
-         * columns when they fit.
+         * scrolls). md+: columns lay out horizontally and the region scrolls
+         * HORIZONTALLY (`md:overflow-x-auto`). When the viewport is also tall it
+         * becomes a fixed pane (`tall:md:flex-1` + `overflow-y-hidden`) so the
+         * H-scrollbar sits at the viewport bottom and columns scroll their tasks
+         * internally; on short viewports it keeps natural height and <main>
+         * scrolls. The inner `w-max mx-auto` track centers the columns when they
+         * fit; `tall:md:h-full` only stretches them in the pane case.
          */}
-        <div className="px-4 pb-4 md:min-h-0 md:flex-1 md:overflow-x-auto md:overflow-y-hidden md:px-8 md:pb-0">
-          <div className="flex flex-col gap-3 md:mx-auto md:h-full md:w-max md:flex-row">
+        <div className="px-4 pb-4 md:overflow-x-auto md:px-8 tall:md:min-h-0 tall:md:flex-1 tall:md:overflow-y-hidden tall:md:pb-0">
+          <div className="flex flex-col gap-3 md:mx-auto md:w-max md:flex-row tall:md:h-full">
             {board.columns
               .slice()
               .sort((a, b) => a.order - b.order)
