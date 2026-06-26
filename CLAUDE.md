@@ -92,14 +92,11 @@ After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and
   you edit (no Save/Discard). **Shift+C** focuses the comment box (NoteThread
   exposes a `composeRef`). **⌘/Ctrl+Enter** is *done* — since every field
   auto-saves it just commits & closes (skipped when a child already handled the
-  chord, e.g. the note box submitting a comment via `e.defaultPrevented`). A
-  **Discussion** toggle (top-right of the read-only view, `discussionOnly` state)
-  collapses the metadata (status/due/reminder/labels + Edit) so only the **title,
-  description, and discussion thread** remain; it flips to **Details** to restore
-  them, and resets on close. These shortcuts (⌘/Ctrl+Enter, Shift+E, Shift+C) are
-  **modal-local** (`onKeyDown` on `DialogContent`, guarded against firing while
-  typing) — NOT in `useGlobalKeymap` and NOT in the `keymap.ts` cheat sheet (only
-  `f` hint mode reaches in from the global keymap).
+  chord, e.g. the note box submitting a comment via `e.defaultPrevented`). These
+  shortcuts (⌘/Ctrl+Enter, Shift+E, Shift+C) are **modal-local** (`onKeyDown` on
+  `DialogContent`, guarded against firing while typing) — NOT in `useGlobalKeymap`
+  and NOT in the `keymap.ts` cheat sheet (only `f` hint mode reaches in from the
+  global keymap).
   **Escape** first *steps out* of a focused field (`onEscapeKeyDown` blurs it by
   focusing the `contentRef`; nothing is lost since fields auto-save) and only
   **closes** on a second Escape with no field focused. "Done editing" → read-only

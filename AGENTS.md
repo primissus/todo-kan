@@ -170,10 +170,7 @@ src/
   reveal the full form, whose fields **commit live** to the store (no Save/Discard); **Shift+C**
   focuses the comment box (via NoteThread's `composeRef`). **⌘/Ctrl+Enter** commits &
   closes (fields auto-save, so it's just "done"; skipped via `e.defaultPrevented`
-  when a child note box submits a comment on the same chord). A **Discussion** toggle
-  in the read-only header (`discussionOnly` state) collapses the metadata
-  (status/due/reminder/labels + Edit) so only the title, description and thread
-  remain — it flips to **Details** to restore them, and resets on close. These
+  when a child note box submits a comment on the same chord). These
   modal-local shortcuts (`onKeyDown` on `DialogContent`, guarded while typing) live
   here, not in `useGlobalKeymap`/`keymap.ts` — only `f` hint mode reaches in (the
   overlay scopes its labels to the open dialog).

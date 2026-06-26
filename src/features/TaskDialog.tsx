@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from 'react';
 import { toast } from 'sonner';
-import { Archive, CalendarClock, MessageSquare, Pencil, Trash2 } from 'lucide-react';
+import { Archive, CalendarClock, Pencil, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -75,9 +75,6 @@ export function TaskDialog({
   const deleteTask = useAppStore((s) => s.deleteTask);
 
   const [editMode, setEditMode] = useState(false);
-  // "Discussion focus" — collapses the task's metadata so only the title,
-  // description and the discussion thread show. Toggled by the Discussion button.
-  const [discussionOnly, setDiscussionOnly] = useState(false);
   const [noteUnsaved, setNoteUnsaved] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -88,10 +85,7 @@ export function TaskDialog({
   // already the read-only view. (Resetting on open runs after paint → a one-frame
   // flash of the stale edit form, whose autoFocus'd input briefly steals focus.)
   useEffect(() => {
-    if (!open) {
-      setEditMode(false);
-      setDiscussionOnly(false);
-    }
+    if (!open) setEditMode(false);
   }, [open]);
 
   if (!taskId || !task) {
@@ -285,8 +279,6 @@ export function TaskDialog({
               onReminderChange={onReminderChange}
               tags={task.tags}
               onEdit={() => setEditMode(true)}
-              discussionOnly={discussionOnly}
-              onToggleDiscussion={() => setDiscussionOnly((v) => !v)}
             />
           )}
 
@@ -392,18 +384,12 @@ interface ReadOnlyViewProps {
   onReminderChange: (value: number | null) => void;
   tags: string[];
   onEdit: () => void;
-  /** When true, the metadata (status/due/reminder/labels) is hidden so only the
-   *  title, description and discussion remain. */
-  discussionOnly: boolean;
-  onToggleDiscussion: () => void;
 }
 
 /**
  * The read-only presentation of a task. Most fields are display-only (edit them
  * via the Edit button), but **Status and Reminder are live controls** here so the
- * two most common quick changes don't require entering edit mode. The
- * **Discussion** button collapses the metadata (status/due/reminder/labels),
- * leaving only the title, description and the discussion thread below.
+ * two most common quick changes don't require entering edit mode.
  */
 function ReadOnlyView({
   title,
@@ -416,8 +402,6 @@ function ReadOnlyView({
   onReminderChange,
   tags,
   onEdit,
-  discussionOnly,
-  onToggleDiscussion,
 }: ReadOnlyViewProps) {
   return (
     <div className="grid gap-4">
@@ -427,33 +411,18 @@ function ReadOnlyView({
             <span className="font-normal text-muted-foreground">Untitled task</span>
           )}
         </h2>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <Button
-            type="button"
-            variant={discussionOnly ? 'secondary' : 'outline'}
-            size="sm"
-            className="gap-1.5"
-            aria-pressed={discussionOnly}
-            onClick={onToggleDiscussion}
-          >
-            <MessageSquare className="size-3.5" />
-            {discussionOnly ? 'Details' : 'Discussion'}
-          </Button>
-          {discussionOnly ? null : (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              aria-keyshortcuts="Shift+E"
-              onClick={onEdit}
-            >
-              <Pencil className="size-3.5" />
-              Edit
-              <Kbd>⇧E</Kbd>
-            </Button>
-          )}
-        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0 gap-1.5"
+          aria-keyshortcuts="Shift+E"
+          onClick={onEdit}
+        >
+          <Pencil className="size-3.5" />
+          Edit
+          <Kbd>⇧E</Kbd>
+        </Button>
       </div>
 
       {description.trim() ? (
@@ -464,60 +433,58 @@ function ReadOnlyView({
         <p className="text-sm text-muted-foreground italic">No description.</p>
       )}
 
-      {discussionOnly ? null : (
-        <dl className="grid gap-2 text-sm">
-          {columns ? (
-            <Row term="Status">
-              <Select
-                value={columnId ?? columns[0]?.id}
-                onValueChange={(v) => onColumnChange(v as ColumnId)}
-              >
-                <SelectTrigger aria-label="Status" className="w-full">
-                  <SelectValue placeholder="Select a column" />
-                </SelectTrigger>
-                <SelectContent>
-                  {columns.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Row>
-          ) : null}
-
-          {dueAt ? (
-            <Row term="Due">
-              <span className="inline-flex items-center gap-1.5 text-muted-foreground">
-                <CalendarClock className="size-3.5" />
-                {formatDateTime(dueAt)}
-              </span>
-            </Row>
-          ) : null}
-
-          <Row term="Reminder">
-            <DateTimePicker
-              label="Reminder"
-              placeholder="No reminder"
-              timeFirst
-              value={remindAt}
-              onChange={onReminderChange}
-            />
-          </Row>
-
-          {tags.length > 0 ? (
-            <Row term="Labels" alignTop>
-              <div className="flex flex-wrap gap-1.5">
-                {tags.map((t) => (
-                  <Badge key={t} variant="secondary">
-                    {t}
-                  </Badge>
+      <dl className="grid gap-2 text-sm">
+        {columns ? (
+          <Row term="Status">
+            <Select
+              value={columnId ?? columns[0]?.id}
+              onValueChange={(v) => onColumnChange(v as ColumnId)}
+            >
+              <SelectTrigger aria-label="Status" className="w-full">
+                <SelectValue placeholder="Select a column" />
+              </SelectTrigger>
+              <SelectContent>
+                {columns.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.title}
+                  </SelectItem>
                 ))}
-              </div>
-            </Row>
-          ) : null}
-        </dl>
-      )}
+              </SelectContent>
+            </Select>
+          </Row>
+        ) : null}
+
+        {dueAt ? (
+          <Row term="Due">
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+              <CalendarClock className="size-3.5" />
+              {formatDateTime(dueAt)}
+            </span>
+          </Row>
+        ) : null}
+
+        <Row term="Reminder">
+          <DateTimePicker
+            label="Reminder"
+            placeholder="No reminder"
+            timeFirst
+            value={remindAt}
+            onChange={onReminderChange}
+          />
+        </Row>
+
+        {tags.length > 0 ? (
+          <Row term="Labels" alignTop>
+            <div className="flex flex-wrap gap-1.5">
+              {tags.map((t) => (
+                <Badge key={t} variant="secondary">
+                  {t}
+                </Badge>
+              ))}
+            </div>
+          </Row>
+        ) : null}
+      </dl>
     </div>
   );
 }

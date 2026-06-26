@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '@/App';
 import { TodoView } from '@/features/todo/TodoView';
@@ -155,34 +155,6 @@ describe('TaskDialog (read-only view → edit + discussion)', () => {
     await user.clear(titleInput);
     await user.type(titleInput, 'Renamed');
     expect(useAppStore.getState().tasks[t].title).toBe('Renamed');
-  });
-
-  it('Discussion button collapses metadata to title + description + thread', async () => {
-    const user = userEvent.setup();
-    const id = useAppStore.getState().createBoard('todo');
-    useAppStore.getState().addTask(id, {
-      title: 'Original',
-      description: 'Body text',
-    });
-    render(<TodoView boardId={id} />);
-
-    await user.click(screen.getByRole('button', { name: 'Open task' }));
-    const dialog = await screen.findByRole('dialog');
-    const d = within(dialog);
-    // Metadata (the Reminder row) and the Edit button show in the normal view.
-    expect(d.getByText('Reminder')).toBeInTheDocument();
-
-    // Discussion focus hides the metadata + Edit, keeping title/description/thread.
-    await user.click(d.getByRole('button', { name: 'Discussion' }));
-    expect(d.queryByText('Reminder')).toBeNull();
-    expect(d.queryByRole('button', { name: /Edit/ })).toBeNull();
-    expect(d.getByRole('heading', { name: 'Original' })).toBeInTheDocument();
-    expect(d.getByText('Body text')).toBeInTheDocument();
-    expect(d.getByLabelText('Add a note')).toBeInTheDocument();
-
-    // Details toggles the metadata back.
-    await user.click(d.getByRole('button', { name: 'Details' }));
-    expect(d.getByText('Reminder')).toBeInTheDocument();
   });
 
   it('⌘/Ctrl+Enter closes the task dialog', async () => {
