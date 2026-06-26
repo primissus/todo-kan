@@ -39,10 +39,10 @@ browser — your data is saved locally in that browser.
 ## How to use
 
 - **New** (top right of the home page) → create a TODO list or a Kanban board.
-- Click a card to open it. It opens **read-only** (with rendered links and the
-  discussion thread); press **Edit** (or **Shift+E**) to change the title,
-  description, status, due date, reminder, and labels. **Shift+C** jumps to the
-  comment box.
+- Click a card to open it. It opens **read-only** (Markdown description + the
+  discussion thread) — though you can change its **status** and **reminder** right
+  there. Press **Edit** (or **Shift+E**) for the full form (title, description, due
+  date, labels). **Shift+C** jumps to the comment box.
 - **TODO**: add tasks, check them off, hide/show completed, drag to reorder,
   archive what you’re done with. "Clear" wipes the list (type `clear` to confirm).
 - **Kanban**: configure columns (default *Pending / In Progress / Review / Done*),

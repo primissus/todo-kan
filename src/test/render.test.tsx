@@ -208,6 +208,34 @@ describe('TaskDialog (read-only view → edit + discussion)', () => {
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
     await waitFor(() => expect(screen.queryByLabelText('Title')).toBeNull());
   });
+
+  it('exposes a live Reminder control in the read-only view (no edit needed)', async () => {
+    const user = userEvent.setup();
+    const id = useAppStore.getState().createBoard('todo');
+    useAppStore.getState().addTask(id, { title: 'Original' });
+    render(<TodoView boardId={id} />);
+
+    await user.click(screen.getByRole('button', { name: 'Open task' }));
+    await screen.findByRole('heading', { name: 'Original' });
+
+    // Still read-only (no Title field), but the Reminder picker is right there.
+    expect(screen.queryByLabelText('Title')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Reminder' })).toBeInTheDocument();
+  });
+
+  it('exposes a live Status control in the read-only view (Kanban)', async () => {
+    const user = userEvent.setup();
+    const id = useAppStore.getState().createBoard('kanban');
+    const col0 = useAppStore.getState().boards[id].columns[0].id;
+    useAppStore.getState().addTask(id, { title: 'Card', columnId: col0 });
+    render(<KanbanView boardId={id} />);
+
+    await user.click(screen.getByRole('button', { name: 'Open card' }));
+    await screen.findByRole('heading', { name: 'Card' });
+
+    expect(screen.queryByLabelText('Title')).toBeNull();
+    expect(screen.getByRole('combobox', { name: 'Status' })).toBeInTheDocument();
+  });
 });
 
 describe('Home search', () => {

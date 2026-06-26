@@ -78,8 +78,10 @@ After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and
   opened via `useUiStore.editId` (Enter / clicking a card or its open button). It
   opens **read-only** (`editMode` state, reset to `false` when the dialog
   **closes** so the next open paints read-only with no edit-form flash): the title
-  is a heading, the description renders **Markdown** (see below), and
-  status/due/reminder/labels show for reading, with the discussion thread below.
+  is a heading, the description renders **Markdown** (see below), due date + labels
+  show for reading, and **Status + Reminder stay LIVE controls in the read-only view**
+  (the two most common quick edits — the `Select` and the `timeFirst` `DateTimePicker`,
+  committing via the same store actions as edit mode), with the discussion thread below.
   **Shift+E** or the **Edit** button reveals the form; its fields (title,
   description, status, due date, reminder, labels) **commit LIVE** to the store as
   you edit (no Save/Discard). **Shift+C** focuses the comment box (NoteThread

@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from 'react';
 import { toast } from 'sonner';
-import { Archive, Bell, CalendarClock, Pencil, Trash2 } from 'lucide-react';
+import { Archive, CalendarClock, Pencil, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -51,11 +51,12 @@ export interface TaskDialogProps {
 
 /**
  * Unified task view/edit modal — opened on Enter / click / the card's open button.
- * It opens **read-only**: the details (title, description with rendered links,
- * status, due date, reminder, labels) are shown for reading, and the discussion
- * thread is embedded below. Press **Shift+E** (or the Edit button) to reveal the
- * form, whose fields commit LIVE to the store as you edit (no Save/Discard — the
- * only unsaved state is an in-progress note draft, which prompts on close).
+ * It opens **read-only**: title, Markdown description, due date and labels are shown
+ * for reading, with the discussion thread below. **Status and Reminder stay live
+ * controls in the read-only view** (the two most common quick edits). Press
+ * **Shift+E** (or the Edit button) to reveal the full form, whose fields commit LIVE
+ * to the store as you edit (no Save/Discard — the only unsaved state is an
+ * in-progress note draft, which prompts on close).
  * **Shift+C** jumps to the comment box; **"Done editing"** returns to the
  * read-only view. **Escape** first steps out of a focused field (nothing is lost —
  * fields auto-save), then closes the dialog on a second Escape when no field is
@@ -142,9 +143,6 @@ export function TaskDialog({
       composeRef.current?.focus();
     }
   };
-
-  const currentColumn =
-    columns?.find((c) => c.id === task.columnId) ?? columns?.[0];
 
   return (
     <Dialog
@@ -264,9 +262,12 @@ export function TaskDialog({
             <ReadOnlyView
               title={task.title}
               description={task.description}
-              statusTitle={columns ? currentColumn?.title : undefined}
+              columns={columns}
+              columnId={task.columnId}
+              onColumnChange={(id) => patch({ columnId: id })}
               dueAt={task.dueAt}
-              remindAt={task.remindAt}
+              remindAt={task.remindAt ?? null}
+              onReminderChange={onReminderChange}
               tags={task.tags}
               onEdit={() => setEditMode(true)}
             />
@@ -365,21 +366,31 @@ function Kbd({ children }: { children: ReactNode }) {
 interface ReadOnlyViewProps {
   title: string;
   description: string;
-  /** Undefined on TODO boards (no columns); a column title on Kanban. */
-  statusTitle?: string;
+  /** Undefined on TODO boards (no columns); the board's columns on Kanban. */
+  columns?: Column[];
+  columnId: ColumnId | null;
+  onColumnChange: (id: ColumnId) => void;
   dueAt?: number;
-  remindAt?: number;
+  remindAt: number | null;
+  onReminderChange: (value: number | null) => void;
   tags: string[];
   onEdit: () => void;
 }
 
-/** The read-only presentation of a task: rendered links, status, schedule, labels. */
+/**
+ * The read-only presentation of a task. Most fields are display-only (edit them
+ * via the Edit button), but **Status and Reminder are live controls** here so the
+ * two most common quick changes don't require entering edit mode.
+ */
 function ReadOnlyView({
   title,
   description,
-  statusTitle,
+  columns,
+  columnId,
+  onColumnChange,
   dueAt,
   remindAt,
+  onReminderChange,
   tags,
   onEdit,
 }: ReadOnlyViewProps) {
@@ -413,42 +424,58 @@ function ReadOnlyView({
         <p className="text-sm text-muted-foreground italic">No description.</p>
       )}
 
-      {(statusTitle !== undefined || dueAt || remindAt || tags.length > 0) && (
-        <dl className="grid gap-2 text-sm">
-          {statusTitle !== undefined ? (
-            <Row term="Status">
-              <Badge variant="secondary">{statusTitle ?? '—'}</Badge>
-            </Row>
-          ) : null}
-          {dueAt ? (
-            <Row term="Due">
-              <span className="inline-flex items-center gap-1.5">
-                <CalendarClock className="size-3.5 text-muted-foreground" />
-                {formatDateTime(dueAt)}
-              </span>
-            </Row>
-          ) : null}
-          {remindAt ? (
-            <Row term="Reminder">
-              <span className="inline-flex items-center gap-1.5">
-                <Bell className="size-3.5 text-muted-foreground" />
-                {formatDateTime(remindAt)}
-              </span>
-            </Row>
-          ) : null}
-          {tags.length > 0 ? (
-            <Row term="Labels" alignTop>
-              <div className="flex flex-wrap gap-1.5">
-                {tags.map((t) => (
-                  <Badge key={t} variant="secondary">
-                    {t}
-                  </Badge>
+      <dl className="grid gap-2 text-sm">
+        {columns ? (
+          <Row term="Status">
+            <Select
+              value={columnId ?? columns[0]?.id}
+              onValueChange={(v) => onColumnChange(v as ColumnId)}
+            >
+              <SelectTrigger aria-label="Status" className="w-full">
+                <SelectValue placeholder="Select a column" />
+              </SelectTrigger>
+              <SelectContent>
+                {columns.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.title}
+                  </SelectItem>
                 ))}
-              </div>
-            </Row>
-          ) : null}
-        </dl>
-      )}
+              </SelectContent>
+            </Select>
+          </Row>
+        ) : null}
+
+        {dueAt ? (
+          <Row term="Due">
+            <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+              <CalendarClock className="size-3.5" />
+              {formatDateTime(dueAt)}
+            </span>
+          </Row>
+        ) : null}
+
+        <Row term="Reminder">
+          <DateTimePicker
+            label="Reminder"
+            placeholder="No reminder"
+            timeFirst
+            value={remindAt}
+            onChange={onReminderChange}
+          />
+        </Row>
+
+        {tags.length > 0 ? (
+          <Row term="Labels" alignTop>
+            <div className="flex flex-wrap gap-1.5">
+              {tags.map((t) => (
+                <Badge key={t} variant="secondary">
+                  {t}
+                </Badge>
+              ))}
+            </div>
+          </Row>
+        ) : null}
+      </dl>
     </div>
   );
 }
@@ -469,7 +496,7 @@ function Row({
       >
         {term}
       </dt>
-      <dd className="min-w-0">{children}</dd>
+      <dd className="min-w-0 flex-1">{children}</dd>
     </div>
   );
 }

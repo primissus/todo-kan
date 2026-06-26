@@ -159,9 +159,10 @@ src/
   `useUiStore.newColumnId`.
 - **Task dialog & scheduling.** Opening a task (Enter / clicking the card / its open
   button) shows `features/TaskDialog.tsx` — a view/edit modal that opens **read-only**
-  (title heading, linkified description, status/due/reminder/labels, and the
-  `features/NoteThread.tsx` discussion below). **Shift+E** / the Edit button reveal
-  the form, whose fields **commit live** to the store (no Save/Discard); **Shift+C**
+  (title heading, Markdown description, due date + labels for reading, the
+  `features/NoteThread.tsx` discussion below — and **Status + Reminder as live controls**
+  even in the read-only view, the two common quick edits). **Shift+E** / the Edit button
+  reveal the full form, whose fields **commit live** to the store (no Save/Discard); **Shift+C**
   focuses the comment box (via NoteThread's `composeRef`). Those two shortcuts are
   modal-local (`onKeyDown` on `DialogContent`, guarded while typing) — the global
   keymap bails inside dialogs, so they live here, not in `useGlobalKeymap`/`keymap.ts`.
