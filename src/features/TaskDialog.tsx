@@ -29,7 +29,7 @@ import {
 import { TagInput } from '@/components/TagInput';
 import { DateTimePicker } from '@/components/DateTimePicker';
 import { ConfirmModal } from '@/components/ConfirmModal';
-import { Linkify } from '@/components/Linkify';
+import { Markdown } from '@/components/Markdown';
 import { NoteThread } from '@/features/NoteThread';
 import { formatDateTime } from '@/lib/datetime';
 import {
@@ -406,9 +406,9 @@ function ReadOnlyView({
       </div>
 
       {description.trim() ? (
-        <p className="text-sm break-words whitespace-pre-wrap text-foreground/90">
-          <Linkify text={description} />
-        </p>
+        <div className="text-sm break-words text-foreground/90">
+          <Markdown text={description} />
+        </div>
       ) : (
         <p className="text-sm text-muted-foreground italic">No description.</p>
       )}

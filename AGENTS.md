@@ -42,6 +42,7 @@ src/
     datetime.ts                  # pure date/time helpers for the date-time picker
     notifications.ts             # Web Notifications boundary (in-tab reminders)
     linkify.ts                   # pure URL tokenizer (bare URLs → link segments)
+    markdown.ts                  # pure Markdown-subset parser (AST + safeHref); no deps
     transfer.ts                  # export/import (+ id re-keying, incl. notes; fingerprint/diff)
     fileSync.ts                  # File System Access API: link a file + auto-save the dataset to it
     router.ts                    # tiny hash router
@@ -62,7 +63,8 @@ src/
     CommandPalette (search), HelpDialog (? cheat sheet, mode-aware), HintOverlay (f hints),
     KeyboardStatus (move-mode banner + sr-only selection announcements),
     CommandLine (: command line — Vim-keys toggle + bottom-left mode indicator),
-    Linkify (renders bare URLs in free text as anchors)
+    Linkify (renders bare URLs in free text as anchors),
+    Markdown (renders the Markdown subset → React elements; code-block copy button; reuses Linkify)
   features/
     BoardHeader.tsx, TaskFormDialog.tsx (create), TaskDialog.tsx (unified view/edit
     + due/reminder + discussion), NoteThread.tsx (the note thread, embedded in TaskDialog),
@@ -73,7 +75,8 @@ src/
   styles/ globals.css, theme.css
   test/   setup.ts, store.test.ts, notes.test.ts, render.test.tsx,
           keymap.test.tsx, keymapTable.test.ts, hints.test.ts,
-          linkify.test.ts, datetime.test.ts, uiStore.test.ts, transfer.test.ts
+          linkify.test.ts, markdown.test.ts, markdownRender.test.tsx,
+          datetime.test.ts, uiStore.test.ts, transfer.test.ts
 ```
 
 ## Architecture (read before touching state/UI)
@@ -261,7 +264,9 @@ src/
   archived-drawer nav, Esc→Home and the discard guard; `keymapTable.test.ts`
   covers the mode-aware Help table (`visibleBindings`); `notes.test.ts` covers the
   note thread actions + import re-keying; `linkify.test.ts` covers the URL
-  tokenizer; `datetime.test.ts` covers the pure date-picker math; `hints.test.ts`
+  tokenizer; `markdown.test.ts` covers the Markdown parser + `safeHref`, and
+  `markdownRender.test.tsx` the renderer (copy button, verbatim code, inert unsafe
+  links); `datetime.test.ts` covers the pure date-picker math; `hints.test.ts`
   + `uiStore.test.ts` cover the pure/ephemeral pieces. `store.test.ts` also covers
   `type:` query parsing and `dueAt`/`remindAt` edits; `render.test.tsx` covers the
   unified TaskDialog live-edit and the Home `type:task` jump-to-task flow.

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ConfirmModal } from '@/components/ConfirmModal';
-import { Linkify } from '@/components/Linkify';
+import { Markdown } from '@/components/Markdown';
 import { useAppStore } from '@/store/useAppStore';
 
 export interface NoteThreadProps {
@@ -183,9 +183,9 @@ export function NoteThread({
                     </div>
                   ) : (
                     <>
-                      <p className="text-sm break-words whitespace-pre-wrap">
-                        <Linkify text={n.text} />
-                      </p>
+                      <div className="text-sm break-words">
+                        <Markdown text={n.text} />
+                      </div>
                       <div className="mt-1.5 flex items-center gap-1">
                         <span className="text-xs text-muted-foreground">
                           {stamp}

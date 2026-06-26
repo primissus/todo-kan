@@ -78,7 +78,7 @@ After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and
   opened via `useUiStore.editId` (Enter / clicking a card or its open button). It
   opens **read-only** (`editMode` state, reset to `false` when the dialog
   **closes** so the next open paints read-only with no edit-form flash): the title
-  is a heading, the description renders links via `Linkify`, and
+  is a heading, the description renders **Markdown** (see below), and
   status/due/reminder/labels show for reading, with the discussion thread below.
   **Shift+E** or the **Edit** button reveals the form; its fields (title,
   description, status, due date, reminder, labels) **commit LIVE** to the store as
@@ -96,8 +96,17 @@ After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and
   actions `addNote`/`editNote`/`deleteNote`). The thread UI is
   `src/features/NoteThread.tsx`, rendered inside `TaskDialog`; notes commit
   immediately (not the form save/discard model) and report unsaved drafts up via
-  `onUnsavedChange`. **Bare URLs** in descriptions AND notes render as links via
-  the pure tokenizer `src/lib/linkify.ts` + `src/components/Linkify.tsx`.
+  `onUnsavedChange`. **Descriptions AND notes render a Markdown subset** —
+  hand-rolled + dependency-free (lists, bold/italic, headings, inline code, fenced
+  code blocks with a copy button, blockquotes, `[label](url)`; no images) via the
+  pure parser `src/lib/markdown.ts` + renderer `src/components/Markdown.tsx`. It
+  emits React elements (never `dangerouslySetInnerHTML` → no sanitizer needed),
+  reuses `src/components/Linkify.tsx` for **bare-URL** autolinks inside text leaves,
+  and scheme-guards explicit-link hrefs via `safeHref` (http/https/mailto/relative
+  only — `javascript:`/`data:` become inert text). Editing stays a raw `<Textarea>`
+  (the rendered form shows in the read-only description / un-edited notes); full
+  Markdown also renders on Kanban cards + TODO rows. Keep the subset minimal — **no
+  heavy md libs** (same single-file rationale as the hand-rolled date picker).
 - **Due date & reminders**: tasks gained optional `dueAt`/`remindAt` (unix ms).
   Edited with the **dependency-free** shadcn-style `src/components/DateTimePicker.tsx`
   (Popover + hand-rolled calendar grid + native time input; pure helpers +

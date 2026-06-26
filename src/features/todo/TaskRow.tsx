@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Linkify } from '@/components/Linkify';
+import { Markdown } from '@/components/Markdown';
 import { cn } from '@/lib/utils';
 import { formatDateTime } from '@/lib/datetime';
 import { useAppStore } from '@/store/useAppStore';
@@ -169,9 +169,9 @@ export function TaskRow({ task, onEdit }: TaskRowProps) {
         </div>
 
         {task.description ? (
-          <p className="mt-0.5 text-sm whitespace-pre-wrap break-words text-muted-foreground">
-            <Linkify text={task.description} />
-          </p>
+          <div className="mt-0.5 text-sm break-words text-muted-foreground">
+            <Markdown text={task.description} />
+          </div>
         ) : null}
       </div>
     </div>

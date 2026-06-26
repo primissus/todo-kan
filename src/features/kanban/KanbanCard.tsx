@@ -3,7 +3,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Archive, Bell, CalendarClock, MessageSquare, SquarePen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Linkify } from '@/components/Linkify';
+import { Markdown } from '@/components/Markdown';
 import { cn } from '@/lib/utils';
 import { formatDateTime } from '@/lib/datetime';
 import { useAppStore } from '@/store/useAppStore';
@@ -121,9 +121,9 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
       </div>
 
       {task.description ? (
-        <p className="mt-1 text-xs whitespace-pre-wrap break-words text-muted-foreground">
-          <Linkify text={task.description} />
-        </p>
+        <div className="mt-1 text-xs break-words text-muted-foreground">
+          <Markdown text={task.description} />
+        </div>
       ) : null}
 
       {(task.dueAt != null || task.remindAt != null) && (
