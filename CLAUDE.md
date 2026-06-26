@@ -30,8 +30,12 @@ After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and
   off only the "simple" keys fire (arrows, Enter, Esc, ⌘K, `?`, `:`). Toggle via
   the bottom-left command line (`src/components/CommandLine.tsx`) — press `:`,
   type `q`, Enter. The cheat-sheet table in `src/lib/keymap.ts` drives the `?`
-  Help dialog — **keep the two in sync**. Cards read "am I selected?" via the
-  granular selectors in `src/hooks/useSelection.ts`.
+  Help dialog — **keep the two in sync**. **`f` hint mode fires even while a
+  dialog is open** (so the task form / task view can be hint-navigated; the
+  `HintOverlay` scopes its labels to the topmost open dialog) — it still yields
+  while you're typing in a field. Cards/rows read "am I selected?" via the
+  granular selectors in `src/hooks/useSelection.ts`; a **selected card/row also
+  reveals its hover action buttons** (the keyboard cursor has no hover).
   **Kanban column headers are cursor targets**: each column is navigated as the
   list `[header, ...cards]`, so ↑ on the first card lands on the header and headers
   step ←/→ across columns (even empty ones); `selectedId` then holds a column id
@@ -75,7 +79,8 @@ After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and
   `taskIds` (filtered per column); the primitive is
   `moveTaskToColumn(taskId, columnId, beforeTaskId|null)`. "Done" column = `isDone` flag.
 - **Task view dialog** (`src/features/TaskDialog.tsx`): the unified view/edit modal
-  opened via `useUiStore.editId` (Enter / clicking a card or its open button). It
+  opened via `useUiStore.editId` (Enter / clicking a card or its open button — an
+  **eye / "view"** icon on the card/row, since the dialog opens read-only first). It
   opens **read-only** (`editMode` state, reset to `false` when the dialog
   **closes** so the next open paints read-only with no edit-form flash): the title
   is a heading, the description renders **Markdown** (see below), due date + labels
@@ -85,9 +90,16 @@ After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and
   **Shift+E** or the **Edit** button reveals the form; its fields (title,
   description, status, due date, reminder, labels) **commit LIVE** to the store as
   you edit (no Save/Discard). **Shift+C** focuses the comment box (NoteThread
-  exposes a `composeRef`). Both shortcuts are **modal-local** (`onKeyDown` on
-  `DialogContent`, guarded against firing while typing) — NOT in `useGlobalKeymap`
-  (which bails while a dialog is open) and NOT in the `keymap.ts` cheat sheet.
+  exposes a `composeRef`). **⌘/Ctrl+Enter** is *done* — since every field
+  auto-saves it just commits & closes (skipped when a child already handled the
+  chord, e.g. the note box submitting a comment via `e.defaultPrevented`). A
+  **Discussion** toggle (top-right of the read-only view, `discussionOnly` state)
+  collapses the metadata (status/due/reminder/labels + Edit) so only the **title,
+  description, and discussion thread** remain; it flips to **Details** to restore
+  them, and resets on close. These shortcuts (⌘/Ctrl+Enter, Shift+E, Shift+C) are
+  **modal-local** (`onKeyDown` on `DialogContent`, guarded against firing while
+  typing) — NOT in `useGlobalKeymap` and NOT in the `keymap.ts` cheat sheet (only
+  `f` hint mode reaches in from the global keymap).
   **Escape** first *steps out* of a focused field (`onEscapeKeyDown` blurs it by
   focusing the `contentRef`; nothing is lost since fields auto-save) and only
   **closes** on a second Escape with no field focused. "Done editing" → read-only

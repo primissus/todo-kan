@@ -52,7 +52,7 @@ export const KEYMAP: KeyBinding[] = [
   { keys: ['⌘', 'K'], label: 'Search this board', category: 'Global' },
   { keys: ['Ctrl', 'K'], label: 'Search this board', category: 'Global' },
   { keys: ['/'], label: 'Search this board', category: 'Global', vimOnly: true },
-  { keys: ['f'], label: 'Hint mode — type a label to click anything', category: 'Global', vimOnly: true },
+  { keys: ['f'], label: 'Hint mode — type a label to click anything (works inside the task form too)', category: 'Global', vimOnly: true },
   { keys: ['?'], label: 'Show this shortcuts cheat sheet', category: 'Global' },
   { keys: [':', 'q', '↵'], label: 'Toggle Vim keys on/off (off by default)', category: 'Global' },
 ];

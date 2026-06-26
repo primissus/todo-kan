@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Archive, Bell, CalendarClock, MessageSquare, SquarePen } from 'lucide-react';
+import { Archive, Bell, CalendarClock, Eye, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Markdown } from '@/components/Markdown';
 import { cn } from '@/lib/utils';
@@ -83,7 +83,14 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
           </button>
         )}
         {!overlay && (
-          <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover/card:opacity-100">
+          <div
+            className={cn(
+              'flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover/card:opacity-100',
+              // Selected via the keyboard cursor → reveal the actions (it has no
+              // hover), matching how a focused row exposes them in the TODO list.
+              selected && 'opacity-100',
+            )}
+          >
             {noteCount === 0 && (
               <Button
                 variant="ghost"
@@ -104,7 +111,7 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
               {...stopDrag}
               onClick={onEdit}
             >
-              <SquarePen className="size-3.5" />
+              <Eye className="size-3.5" />
             </Button>
             <Button
               variant="ghost"

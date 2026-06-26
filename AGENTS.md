@@ -143,10 +143,14 @@ src/
   `reorderTaskInBoard`, the new `reorderBoard`); revert uses `restoreTaskOrder` /
   `restoreBoardOrder`. Cards subscribe to "am I selected?" through the primitive
   selectors in `hooks/useSelection.ts` so a cursor move re-renders only the two
-  cards involved, not the list.
+  cards involved, not the list; a **selected card/row also reveals its hover
+  action buttons** (open/archive) — the keyboard cursor has no hover.
 - **Vim keys are opt-in** (`vimEnabled`, off by default). `handleKey` is split
   into an always-available block (arrows, Enter, Esc, ⌘K/Ctrl+K, `?`, `:`) and a
-  Vim-gated block (j/k/h/l, `m`, `a`, `f`, `/`, Shift-combos). `:` opens the
+  Vim-gated block (j/k/h/l, `m`, `a`, `f`, `/`, Shift-combos) — `f` hint mode is
+  checked *before* the dialog guard (but after the typing guard) so it can label
+  an open dialog's own controls (the task form); every other key still bails when
+  a dialog owns the keyboard. `:` opens the
   `CommandLine`; `:q`↵ toggles `vimEnabled`. **Esc** clears the cursor, then backs
   out to Home from a board. **Shift+D** sets `deleteId` to open a destructive
   confirm; the board views run the exported `deleteTaskWithCursor` on confirm.
@@ -157,15 +161,22 @@ src/
   `a`/`m`/Shift+D are guarded off). **Shift+N**/**Enter** on a header (and Shift+N
   on any card) opens the create form for the cursor's column via
   `useUiStore.newColumnId`.
-- **Task dialog & scheduling.** Opening a task (Enter / clicking the card / its open
-  button) shows `features/TaskDialog.tsx` — a view/edit modal that opens **read-only**
+- **Task dialog & scheduling.** Opening a task (Enter / clicking the card / its
+  **eye / "view"** open button — the dialog opens read-only first) shows
+  `features/TaskDialog.tsx` — a view/edit modal that opens **read-only**
   (title heading, Markdown description, due date + labels for reading, the
   `features/NoteThread.tsx` discussion below — and **Status + Reminder as live controls**
   even in the read-only view, the two common quick edits). **Shift+E** / the Edit button
   reveal the full form, whose fields **commit live** to the store (no Save/Discard); **Shift+C**
-  focuses the comment box (via NoteThread's `composeRef`). Those two shortcuts are
-  modal-local (`onKeyDown` on `DialogContent`, guarded while typing) — the global
-  keymap bails inside dialogs, so they live here, not in `useGlobalKeymap`/`keymap.ts`.
+  focuses the comment box (via NoteThread's `composeRef`). **⌘/Ctrl+Enter** commits &
+  closes (fields auto-save, so it's just "done"; skipped via `e.defaultPrevented`
+  when a child note box submits a comment on the same chord). A **Discussion** toggle
+  in the read-only header (`discussionOnly` state) collapses the metadata
+  (status/due/reminder/labels + Edit) so only the title, description and thread
+  remain — it flips to **Details** to restore them, and resets on close. These
+  modal-local shortcuts (`onKeyDown` on `DialogContent`, guarded while typing) live
+  here, not in `useGlobalKeymap`/`keymap.ts` — only `f` hint mode reaches in (the
+  overlay scopes its labels to the open dialog).
   **Esc** steps out of a focused field first (blurs to the `contentRef`, nothing is
   lost — fields auto-save) and only closes on a second Esc with no field focused;
   `editMode` resets when the dialog **closes**. Creating a

@@ -509,3 +509,24 @@ describe('HintOverlay', () => {
     btn.remove();
   });
 });
+
+describe('f hint mode reaches an open dialog (the task form)', () => {
+  it('activates hints over an open dialog once focus leaves the fields', async () => {
+    await renderKanban();
+    fireEvent.keyDown(window, { key: 'N', shiftKey: true });
+    expect(await screen.findByLabelText('Title')).toBeInTheDocument();
+    // Hints must yield to typing, so step out of the autofocused title field.
+    (document.activeElement as HTMLElement | null)?.blur();
+    fireEvent.keyDown(window, { key: 'f' });
+    expect(useUiStore.getState().hintsActive).toBe(true);
+  });
+
+  it('yields to typing — f in a focused form field is a literal keystroke', async () => {
+    await renderKanban();
+    fireEvent.keyDown(window, { key: 'N', shiftKey: true });
+    const title = await screen.findByLabelText('Title');
+    title.focus();
+    fireEvent.keyDown(window, { key: 'f' });
+    expect(useUiStore.getState().hintsActive).toBe(false);
+  });
+});

@@ -371,17 +371,21 @@ function handleMoveMode(e: KeyboardEvent, route: Route): void {
 
 // ---- guard + dispatch -----------------------------------------------------
 
-function shouldHandle(e: KeyboardEvent, ui: UiState): boolean {
+/** True when focus is in a text field — letter shortcuts must yield to typing. */
+function isEditableTarget(): boolean {
   const ae = document.activeElement as HTMLElement | null;
   const tag = ae?.tagName;
-  if (
+  return (
     tag === 'INPUT' ||
     tag === 'TEXTAREA' ||
     tag === 'SELECT' ||
-    ae?.isContentEditable
-  ) {
-    return false;
-  }
+    !!ae?.isContentEditable
+  );
+}
+
+function shouldHandle(e: KeyboardEvent, ui: UiState): boolean {
+  if (isEditableTarget()) return false;
+  const ae = document.activeElement as HTMLElement | null;
   // Drive this off the ACTUALLY-rendered dialog, not the ui flags: a stale flag
   // (e.g. editId left set after navigating away) must never wedge the keymap.
   // Every overlay we own (palette/help/new/edit/archived/columns) and the shared
@@ -418,6 +422,25 @@ function handleKey(e: KeyboardEvent, route: Route): void {
   }
   // HintOverlay installs its own capture-phase listener; don't double-handle.
   if (ui.hintsActive) return;
+
+  // `f` hint mode is reachable even while a dialog is open (Vimium-style), so the
+  // task form / task dialog can be navigated and triggered by hint — but never
+  // while the user is typing in a field. (Every other key stays gated by
+  // shouldHandle below, which bails when a dialog owns the keyboard.)
+  if (
+    ui.vimEnabled &&
+    !e.metaKey &&
+    !e.ctrlKey &&
+    !e.altKey &&
+    !e.shiftKey &&
+    e.key.toLowerCase() === 'f' &&
+    !isEditableTarget()
+  ) {
+    e.preventDefault();
+    ui.setHintsActive(true);
+    return;
+  }
+
   if (!shouldHandle(e, ui)) return;
 
   const ctx = contextFor(route);
@@ -485,11 +508,7 @@ function handleKey(e: KeyboardEvent, route: Route): void {
     ui.setPaletteOpen(true);
     return;
   }
-  if (lower === 'f' && !e.shiftKey) {
-    e.preventDefault();
-    ui.setHintsActive(true);
-    return;
-  }
+  // (`f` hint mode is handled earlier so it also fires over an open dialog.)
 
   // Shift combos
   if (lower === 'n' && e.shiftKey) {

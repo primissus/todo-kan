@@ -5,9 +5,9 @@ import {
   Archive,
   Bell,
   CalendarClock,
+  Eye,
   GripVertical,
   MessageSquare,
-  SquarePen,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -133,8 +133,14 @@ export function TaskRow({ task, onEdit }: TaskRowProps) {
             />
           )}
 
-          {/* Dynamic actions: revealed on hover / keyboard focus to save space. */}
-          <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+          {/* Dynamic actions: revealed on hover / keyboard focus to save space.
+              Also revealed when the keyboard cursor selects this row. */}
+          <div
+            className={cn(
+              'flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100',
+              selected && 'opacity-100',
+            )}
+          >
             <Button
               variant="ghost"
               size="icon"
@@ -154,7 +160,7 @@ export function TaskRow({ task, onEdit }: TaskRowProps) {
               aria-label="Open task"
               onClick={onEdit}
             >
-              <SquarePen className="size-4" />
+              <Eye className="size-4" />
             </Button>
             <Button
               variant="ghost"

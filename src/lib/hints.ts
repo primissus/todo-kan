@@ -25,7 +25,8 @@ export function generateLabels(n: number, alphabet = HINT_ALPHABET): string[] {
 
 const HINT_SELECTOR =
   'button:not(:disabled), a[href], [role="button"], ' +
-  'input:not([type="hidden"]):not([disabled]), [data-hint]';
+  'input:not([type="hidden"]):not([disabled]), ' +
+  'textarea:not([disabled]), [data-hint]';
 
 /** Is this element visible + on-screen enough to deserve a hint? */
 export function isHintable(el: Element): boolean {

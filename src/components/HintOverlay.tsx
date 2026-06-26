@@ -28,7 +28,14 @@ export function HintOverlay() {
       setTyped('');
       return;
     }
-    const els = collectHintTargets(document.body);
+    // Scope hints to the topmost open dialog when one is up (the board behind a
+    // modal is inert), so `f` labels the task form's own fields/buttons. Falls
+    // back to the whole page when no dialog is open.
+    const dialogs = document.querySelectorAll<HTMLElement>(
+      '[data-slot="dialog-content"][data-state="open"]',
+    );
+    const root = dialogs[dialogs.length - 1] ?? document.body;
+    const els = collectHintTargets(root);
     const labels = generateLabels(els.length);
     setHints(
       els.map((el, i) => {
