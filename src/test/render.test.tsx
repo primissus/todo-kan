@@ -46,6 +46,89 @@ describe('TodoView', () => {
     const task = Object.values(useAppStore.getState().tasks)[0];
     expect(task.completed).toBe(true);
   });
+
+  it('renders a URL in the description as a new-tab link', () => {
+    const id = useAppStore.getState().createBoard('todo');
+    useAppStore
+      .getState()
+      .addTask(id, { title: 'L', description: 'see https://example.com now' });
+    render(<TodoView boardId={id} />);
+
+    const link = screen.getByRole('link', { name: 'https://example.com' });
+    expect(link).toHaveAttribute('href', 'https://example.com');
+    expect(link).toHaveAttribute('target', '_blank');
+  });
+
+  it('adds, edits and deletes a note through the notes dialog', async () => {
+    const user = userEvent.setup();
+    const id = useAppStore.getState().createBoard('todo');
+    const t = useAppStore.getState().addTask(id, { title: 'Task' });
+    render(<TodoView boardId={id} />);
+
+    // Open the thread from the row's Notes button.
+    await user.click(screen.getByRole('button', { name: /^notes/i }));
+
+    // Add.
+    await user.type(await screen.findByLabelText('Add a note'), 'My first note');
+    await user.click(screen.getByRole('button', { name: 'Add note' }));
+    expect(await screen.findByText('My first note')).toBeInTheDocument();
+    expect(useAppStore.getState().tasks[t].notes).toHaveLength(1);
+
+    // Edit.
+    await user.click(screen.getByRole('button', { name: /^Edit note/ }));
+    const editBox = screen.getByLabelText('Edit note');
+    await user.clear(editBox);
+    await user.type(editBox, 'edited note');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('edited note')).toBeInTheDocument();
+
+    // Delete (confirm).
+    await user.click(screen.getByRole('button', { name: /^Delete note/ }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(useAppStore.getState().tasks[t].notes).toHaveLength(0);
+  });
+
+  it('saving an unchanged note does not mark it edited', async () => {
+    const user = userEvent.setup();
+    const id = useAppStore.getState().createBoard('todo');
+    const t = useAppStore.getState().addTask(id, { title: 'Task' });
+    useAppStore.getState().addNote(t, 'untouched');
+    render(<TodoView boardId={id} />);
+
+    await user.click(screen.getByRole('button', { name: /^notes/i }));
+    await user.click(await screen.findByRole('button', { name: /^Edit note/ }));
+    // Save without changing anything.
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(screen.queryByText(/edited/)).not.toBeInTheDocument();
+    const note = useAppStore.getState().tasks[t].notes[0];
+    expect(note.updatedAt).toBe(note.createdAt);
+  });
+
+  it('confirms before discarding an in-progress edit when switching notes', async () => {
+    const user = userEvent.setup();
+    const id = useAppStore.getState().createBoard('todo');
+    const t = useAppStore.getState().addTask(id, { title: 'Task' });
+    useAppStore.getState().addNote(t, 'note A');
+    useAppStore.getState().addNote(t, 'note B');
+    render(<TodoView boardId={id} />);
+
+    await user.click(screen.getByRole('button', { name: /^notes/i }));
+    // Edit the first note and make it dirty.
+    const editButtons = await screen.findAllByRole('button', { name: /^Edit note/ });
+    await user.click(editButtons[0]);
+    const editBox = screen.getByLabelText('Edit note');
+    await user.type(editBox, ' changed');
+
+    // Click the other note's Edit — should prompt instead of silently switching.
+    await user.click(screen.getByRole('button', { name: /^Edit note/ }));
+    expect(await screen.findByText('Discard changes?')).toBeInTheDocument();
+
+    // Discard → switches to note B's text; nothing was persisted for A.
+    await user.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(screen.getByLabelText('Edit note')).toHaveValue('note B');
+    expect(useAppStore.getState().tasks[t].notes[0].text).toBe('note A');
+  });
 });
 
 describe('KanbanView', () => {

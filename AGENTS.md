@@ -39,7 +39,8 @@ src/
     utils.ts (cn), id.ts, storage.ts, storageKeys.ts
     theme.ts                     # ported theme logic (families/modes/applyTheme)
     search.ts                    # Fuse.js + "#tag" parsing
-    transfer.ts                  # export/import (+ id re-keying)
+    linkify.ts                   # pure URL tokenizer (bare URLs → link segments)
+    transfer.ts                  # export/import (+ id re-keying, incl. notes)
     router.ts                    # tiny hash router
     keymap.ts                    # declarative shortcut table (drives the Help dialog)
     hints.ts                     # pure f-hint helpers (generateLabels / collectHintTargets)
@@ -56,15 +57,18 @@ src/
     ExportDialog, ImportDialog,
     CommandPalette (search), HelpDialog (? cheat sheet, mode-aware), HintOverlay (f hints),
     KeyboardStatus (move-mode banner + sr-only selection announcements),
-    CommandLine (: command line — Vim-keys toggle + bottom-left mode indicator)
+    CommandLine (: command line — Vim-keys toggle + bottom-left mode indicator),
+    Linkify (renders bare URLs in free text as anchors)
   features/
-    BoardHeader.tsx, TaskFormDialog.tsx, ArchivedTasksDrawer.tsx   # shared by both views
+    BoardHeader.tsx, TaskFormDialog.tsx, NotesDialog.tsx,
+    ArchivedTasksDrawer.tsx                                        # shared by both views
     home/    HomePage, BoardCard
     todo/    TodoView, TaskRow
     kanban/  KanbanView, Column, KanbanCard, ColumnsSettings
   styles/ globals.css, theme.css
-  test/   setup.ts, store.test.ts, render.test.tsx, keymap.test.tsx,
-          keymapTable.test.ts, hints.test.ts, uiStore.test.ts
+  test/   setup.ts, store.test.ts, notes.test.ts, render.test.tsx,
+          keymap.test.tsx, keymapTable.test.ts, hints.test.ts,
+          linkify.test.ts, uiStore.test.ts
 ```
 
 ## Architecture (read before touching state/UI)
@@ -72,7 +76,10 @@ src/
 - **Normalized model** (`lib/types/domain.ts`): `boards`, a flat `tasks` map, and
   a per-board **`taskIds[]`** that is the single source of order. A Kanban column
   = `taskIds` filtered by `columnId`. Don't denormalize (don't nest tasks under
-  boards in the store).
+  boards in the store). A task's `notes: Note[]` thread is the one nested array
+  (notes are scoped to their task, never addressed globally); `addNote`/`editNote`/
+  `deleteNote` are the store actions and they commit immediately. The `persist`
+  `version` is **2** — the v1→v2 `migrate` backfills `notes: []` on older tasks.
 - **All mutations go through `store/useAppStore.ts`** actions. Components read via
   the `selectors.ts` hooks (they use `useShallow` for arrays). Add new behavior as
   a store action, not ad-hoc state in components.
@@ -168,8 +175,9 @@ src/
   `render.test.tsx` mounts the real views; `keymap.test.tsx` drives the global
   shortcuts (`fireEvent.keyDown(window, …)`) incl. the Vim toggle, Shift+D confirm,
   archived-drawer nav, Esc→Home and the discard guard; `keymapTable.test.ts`
-  covers the mode-aware Help table (`visibleBindings`); `hints.test.ts` +
-  `uiStore.test.ts` cover the pure/ephemeral pieces.
+  covers the mode-aware Help table (`visibleBindings`); `notes.test.ts` covers the
+  note thread actions + import re-keying; `linkify.test.ts` covers the URL
+  tokenizer; `hints.test.ts` + `uiStore.test.ts` cover the pure/ephemeral pieces.
 - After UI/logic changes, run `pnpm typecheck && pnpm lint && pnpm test`, then
   `pnpm build` and `pnpm build:single`. Note `tsc -b` type-checks the test files
   too — a green `vitest` run is not enough on its own.

@@ -1,4 +1,4 @@
-import type { BoardId, ColumnId, TaskId } from './types/domain';
+import type { BoardId, ColumnId, NoteId, TaskId } from './types/domain';
 
 function uuidv4Fallback(): string {
   const c = globalThis.crypto;
@@ -29,3 +29,4 @@ export function newId(): string {
 export const newBoardId = (): BoardId => newId() as BoardId;
 export const newTaskId = (): TaskId => newId() as TaskId;
 export const newColumnId = (): ColumnId => newId() as ColumnId;
+export const newNoteId = (): NoteId => newId() as NoteId;

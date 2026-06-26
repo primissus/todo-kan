@@ -7,6 +7,7 @@
 export type BoardId = string & { readonly __brand: 'BoardId' };
 export type TaskId = string & { readonly __brand: 'TaskId' };
 export type ColumnId = string & { readonly __brand: 'ColumnId' };
+export type NoteId = string & { readonly __brand: 'NoteId' };
 
 export type BoardType = 'todo' | 'kanban';
 
@@ -28,6 +29,14 @@ export const DEFAULT_COLUMN_TITLES = [
   'Done',
 ] as const;
 
+/** A single entry in a task's note thread (added / edited / deleted in order). */
+export interface Note {
+  id: NoteId;
+  text: string;
+  createdAt: number;
+  updatedAt: number; // > createdAt once edited
+}
+
 export interface Task {
   id: TaskId;
   boardId: BoardId;
@@ -37,6 +46,7 @@ export interface Task {
   completed: boolean; // todo only; ignored for kanban
   columnId: ColumnId | null; // kanban only; null for todo
   archived: boolean; // task-level archive
+  notes: Note[]; // threaded notes/comments; [] when none
   createdAt: number;
   updatedAt: number;
 }

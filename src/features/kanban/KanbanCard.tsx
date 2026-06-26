@@ -1,10 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Archive, Pencil } from 'lucide-react';
+import { Archive, MessageSquare, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Linkify } from '@/components/Linkify';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/useAppStore';
+import { useUiStore } from '@/store/useUiStore';
 import { useIsMoveTarget, useIsSelected } from '@/hooks/useSelection';
 import type { Task } from '@/lib/types/domain';
 
@@ -28,8 +30,10 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
     data: { type: 'card', columnId: task.columnId },
   });
   const archiveTask = useAppStore((s) => s.archiveTask);
+  const setNotesId = useUiStore((s) => s.setNotesId);
   const selected = useIsSelected(task.id);
   const moveTarget = useIsMoveTarget(task.id);
+  const noteCount = task.notes?.length ?? 0;
 
   const nodeRef = useRef<HTMLDivElement | null>(null);
   const setRefs = (node: HTMLDivElement | null) => {
@@ -71,6 +75,18 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
         </p>
         {!overlay && (
           <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover/card:opacity-100">
+            {noteCount === 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                aria-label="Notes"
+                {...stopDrag}
+                onClick={() => setNotesId(task.id)}
+              >
+                <MessageSquare className="size-3.5" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
@@ -97,7 +113,7 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
 
       {task.description ? (
         <p className="mt-1 text-xs whitespace-pre-wrap break-words text-muted-foreground">
-          {task.description}
+          <Linkify text={task.description} />
         </p>
       ) : null}
 
@@ -111,6 +127,21 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
               {tag}
             </span>
           ))}
+        </div>
+      )}
+
+      {noteCount > 0 && (
+        <div className="mt-2">
+          <button
+            type="button"
+            aria-label={`Notes (${noteCount})`}
+            className="inline-flex items-center gap-1 rounded text-xs text-muted-foreground hover:text-foreground"
+            {...(overlay ? {} : stopDrag)}
+            onClick={overlay ? undefined : () => setNotesId(task.id)}
+          >
+            <MessageSquare className="size-3.5" />
+            <span className="tabular-nums">{noteCount}</span>
+          </button>
         </div>
       )}
     </div>

@@ -4,7 +4,7 @@ import { immer } from 'zustand/middleware/immer';
 
 import { storage } from '@/lib/storage';
 import { STORAGE_KEYS } from '@/lib/storageKeys';
-import { newBoardId, newColumnId, newTaskId } from '@/lib/id';
+import { newBoardId, newColumnId, newNoteId, newTaskId } from '@/lib/id';
 import { rekey, type TransferPayload } from '@/lib/transfer';
 import {
   DEFAULT_COLUMN_TITLES,
@@ -65,6 +65,10 @@ interface Actions {
   toggleComplete: (taskId: string) => void;
   archiveTask: (taskId: string) => void;
   unarchiveTask: (taskId: string) => void;
+  // notes (a per-task thread)
+  addNote: (taskId: string, text: string) => void;
+  editNote: (taskId: string, noteId: string, text: string) => void;
+  deleteNote: (taskId: string, noteId: string) => void;
   // dnd
   reorderTaskInBoard: (
     boardId: string,
@@ -236,6 +240,7 @@ export const useAppStore = create<AppState>()(
             completed: false,
             columnId,
             archived: false,
+            notes: [],
             createdAt: t,
             updatedAt: t,
           };
@@ -303,6 +308,35 @@ export const useAppStore = create<AppState>()(
             tk.archived = false;
             tk.updatedAt = now();
           }
+        }),
+
+      addNote: (taskId, text) =>
+        set((s) => {
+          const tk = s.tasks[taskId];
+          if (!tk) return;
+          // Defensive: tasks persisted before notes existed (pre-migration).
+          if (!tk.notes) tk.notes = [];
+          const t = now();
+          tk.notes.push({ id: newNoteId(), text, createdAt: t, updatedAt: t });
+          tk.updatedAt = t;
+        }),
+
+      editNote: (taskId, noteId, text) =>
+        set((s) => {
+          const tk = s.tasks[taskId];
+          const note = tk?.notes?.find((n) => n.id === noteId);
+          if (!tk || !note) return;
+          note.text = text;
+          note.updatedAt = now();
+          tk.updatedAt = note.updatedAt;
+        }),
+
+      deleteNote: (taskId, noteId) =>
+        set((s) => {
+          const tk = s.tasks[taskId];
+          if (!tk?.notes) return;
+          tk.notes = tk.notes.filter((n) => n.id !== noteId);
+          tk.updatedAt = now();
         }),
 
       reorderTaskInBoard: (boardId, activeTaskId, overTaskId) =>
@@ -394,8 +428,19 @@ export const useAppStore = create<AppState>()(
     })),
     {
       name: STORAGE_KEYS.app,
-      version: 1,
+      version: 2,
       storage: createJSONStorage(() => storage),
+      // v1 → v2: tasks gained a `notes` thread. Backfill `[]` so every loaded
+      // task is normalized (render/read code can treat `notes` as always-present).
+      migrate: (persisted) => {
+        const s = persisted as Partial<DataState> | undefined;
+        if (s?.tasks) {
+          for (const t of Object.values(s.tasks)) {
+            if (!Array.isArray((t as Task).notes)) (t as Task).notes = [];
+          }
+        }
+        return s as DataState;
+      },
       partialize: (s) => ({
         boards: s.boards,
         boardOrder: s.boardOrder,

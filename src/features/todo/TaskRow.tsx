@@ -1,11 +1,13 @@
 import { useEffect, useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Archive, GripVertical, Pencil } from 'lucide-react';
+import { Archive, GripVertical, MessageSquare, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Linkify } from '@/components/Linkify';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/store/useAppStore';
+import { useUiStore } from '@/store/useUiStore';
 import { useIsMoveTarget, useIsSelected } from '@/hooks/useSelection';
 import type { Task } from '@/lib/types/domain';
 
@@ -25,8 +27,10 @@ export function TaskRow({ task, onEdit }: TaskRowProps) {
   } = useSortable({ id: task.id });
   const toggleComplete = useAppStore((s) => s.toggleComplete);
   const archiveTask = useAppStore((s) => s.archiveTask);
+  const setNotesId = useUiStore((s) => s.setNotesId);
   const selected = useIsSelected(task.id);
   const moveTarget = useIsMoveTarget(task.id);
+  const noteCount = task.notes?.length ?? 0;
 
   const nodeRef = useRef<HTMLDivElement | null>(null);
   const setRefs = (node: HTMLDivElement | null) => {
@@ -84,7 +88,7 @@ export function TaskRow({ task, onEdit }: TaskRowProps) {
         </p>
         {task.description ? (
           <p className="mt-0.5 text-sm whitespace-pre-wrap break-words text-muted-foreground">
-            {task.description}
+            <Linkify text={task.description} />
           </p>
         ) : null}
         {task.tags.length > 0 && (
@@ -102,6 +106,18 @@ export function TaskRow({ task, onEdit }: TaskRowProps) {
       </div>
 
       <div className="flex shrink-0 gap-0.5">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-8 gap-1 px-2 text-muted-foreground"
+          aria-label={noteCount > 0 ? `Notes (${noteCount})` : 'Notes'}
+          onClick={() => setNotesId(task.id)}
+        >
+          <MessageSquare className="size-4" />
+          {noteCount > 0 ? (
+            <span className="text-xs tabular-nums">{noteCount}</span>
+          ) : null}
+        </Button>
         <Button
           variant="ghost"
           size="icon"

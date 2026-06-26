@@ -1,5 +1,26 @@
 # Progress
 
+## 2026-06-26 — Links in descriptions + task note threads
+
+- **Linkify**: bare URLs (`http(s)://`, `www.`) in task descriptions now render as
+  new-tab links in both the TODO and Kanban views. Pure tokenizer in
+  `src/lib/linkify.ts` (trailing-punctuation/balanced-bracket aware), rendered by
+  `src/components/Linkify.tsx` (clicks/pointer-downs stop-propagated so a link in a
+  draggable card opens instead of starting a drag).
+- **Note threads**: tasks gained a `notes: Note[]` thread — add / edit / delete,
+  each with timestamps and an "· edited" marker. Store actions `addNote` /
+  `editNote` / `deleteNote`; opened per-task from a Notes button on each row/card
+  (with a count badge) via `useUiStore.notesId` → `src/features/NotesDialog.tsx`.
+  Note text is linkified too. Persist bumped to **v2** (migrate backfills `[]`);
+  export/import re-keys notes with fresh ids.
+- Tests: `linkify.test.ts` (10) + `notes.test.ts` (7) + render-level link/notes
+  flow (add/edit/delete, no-op-save, edit-switch discard guard); **83/83** pass.
+  `typecheck`, `lint`, `build`, `build:single` all green.
+- Hardened via an adversarial multi-agent review: case-insensitive `www.` href,
+  confirm-before-discarding an in-progress edit when switching notes, no flash of
+  stale confirm copy during the close animation, per-note aria-labels, and a
+  no-op Save no longer bumps `updatedAt`/the "edited" marker.
+
 ## 2026-06-25 — Initial build complete
 
 All requirements in [REQUIREMENTS.md](./REQUIREMENTS.md) are implemented.

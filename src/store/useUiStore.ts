@@ -73,6 +73,9 @@ export interface UiState {
   setNewOpen: (v: boolean) => void;
   editId: string | null;
   setEditId: (id: string | null) => void;
+  /** Task whose note thread is open; null = closed. */
+  notesId: string | null;
+  setNotesId: (id: string | null) => void;
   /** Task pending a (confirmed) Shift+D delete; null = no confirm open. */
   deleteId: string | null;
   setDeleteId: (id: string | null) => void;
@@ -102,6 +105,7 @@ export const initialUiState = {
   hintsActive: false,
   newOpen: false,
   editId: null,
+  notesId: null,
   deleteId: null,
   archivedOpen: false,
   kanbanColumnsOpen: false,
@@ -139,6 +143,7 @@ export const useUiStore = create<UiState>((set) => ({
 
   setNewOpen: (v) => set({ newOpen: v }),
   setEditId: (id) => set({ editId: id }),
+  setNotesId: (id) => set({ notesId: id }),
   setDeleteId: (id) => set({ deleteId: id }),
   setArchivedOpen: (v) => set({ archivedOpen: v }),
   setKanbanColumnsOpen: (v) => set({ kanbanColumnsOpen: v }),
@@ -146,6 +151,7 @@ export const useUiStore = create<UiState>((set) => ({
     set({
       newOpen: false,
       editId: null,
+      notesId: null,
       deleteId: null,
       archivedOpen: false,
       kanbanColumnsOpen: false,

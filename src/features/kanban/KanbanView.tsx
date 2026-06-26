@@ -18,6 +18,7 @@ import { BoardHeader } from '@/features/BoardHeader';
 import { Column } from '@/features/kanban/Column';
 import { KanbanCard } from '@/features/kanban/KanbanCard';
 import { TaskFormDialog } from '@/features/TaskFormDialog';
+import { NotesDialog } from '@/features/NotesDialog';
 import { ArchivedTasksDrawer } from '@/features/ArchivedTasksDrawer';
 import { ColumnsSettings } from '@/features/kanban/ColumnsSettings';
 import { TypeToConfirmModal } from '@/components/TypeToConfirmModal';
@@ -57,6 +58,8 @@ export function KanbanView({ boardId }: KanbanViewProps) {
   const setNewOpen = useUiStore((s) => s.setNewOpen);
   const editId = useUiStore((s) => s.editId);
   const setEditId = useUiStore((s) => s.setEditId);
+  const notesId = useUiStore((s) => s.notesId);
+  const setNotesId = useUiStore((s) => s.setNotesId);
   const deleteId = useUiStore((s) => s.deleteId);
   const setDeleteId = useUiStore((s) => s.setDeleteId);
   const archivedOpen = useUiStore((s) => s.archivedOpen);
@@ -78,6 +81,7 @@ export function KanbanView({ boardId }: KanbanViewProps) {
   const active = tasks.filter((t) => !t.archived);
   const archivedCount = tasks.length - active.length;
   const editTaskObj = editId ? tasks.find((t) => t.id === editId) : undefined;
+  const notesTaskObj = notesId ? tasks.find((t) => t.id === notesId) : undefined;
   const deleteTaskObj = deleteId
     ? tasks.find((t) => t.id === deleteId)
     : undefined;
@@ -264,6 +268,12 @@ export function KanbanView({ boardId }: KanbanViewProps) {
           }
           setEditId(null);
         }}
+      />
+
+      <NotesDialog
+        taskId={notesId}
+        open={!!notesTaskObj}
+        onOpenChange={(o) => !o && setNotesId(null)}
       />
 
       <ColumnsSettings

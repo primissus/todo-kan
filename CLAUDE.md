@@ -38,6 +38,12 @@ After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and
   read by the FOUC script in `index.html` (not in the Zustand blob).
 - **Kanban DnD**: order lives in `taskIds` (filtered per column); the primitive is
   `moveTaskToColumn(taskId, columnId, beforeTaskId|null)`. "Done" column = `isDone` flag.
+- **Task notes**: each task carries a `notes: Note[]` thread (store actions
+  `addNote`/`editNote`/`deleteNote`, persist migration v1→v2 backfills `[]`).
+  Opened per-task via `useUiStore.notesId` → `src/features/NotesDialog.tsx`
+  (rendered by both views). Notes commit immediately (not the form save/discard
+  model). **Bare URLs** in descriptions AND notes render as links via the pure
+  tokenizer `src/lib/linkify.ts` + `src/components/Linkify.tsx`.
 - **App version** (Settings footer): injected at build time from `package.json` via
   `define: __APP_VERSION__` in `vite.config.ts` + `vitest.config.ts` → `src/lib/version.ts`.
 - Path alias `@/` → `src/`. `import type` for types (`verbatimModuleSyntax`).

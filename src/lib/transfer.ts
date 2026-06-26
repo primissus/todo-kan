@@ -3,11 +3,12 @@
 // yields independent copies).
 
 import { EXPORT_APP_ID, EXPORT_SCHEMA_VERSION } from './storageKeys';
-import { newBoardId, newColumnId, newTaskId } from './id';
+import { newBoardId, newColumnId, newNoteId, newTaskId } from './id';
 import type {
   Board,
   BoardId,
   ColumnId,
+  Note,
   Task,
   TaskId,
 } from './types/domain';
@@ -99,6 +100,19 @@ export interface RekeyResult {
   tasks: Task[];
 }
 
+/** Re-key + sanitize a task's notes (tolerates older exports with no notes). */
+function rekeyNotes(raw: unknown): Note[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((n): n is Record<string, unknown> => !!n && typeof n === 'object')
+    .map((n) => ({
+      id: newNoteId(),
+      text: typeof n.text === 'string' ? n.text : '',
+      createdAt: typeof n.createdAt === 'number' ? n.createdAt : Date.now(),
+      updatedAt: typeof n.updatedAt === 'number' ? n.updatedAt : Date.now(),
+    }));
+}
+
 /**
  * Regenerate every board/column/task id and remap references. After this, the
  * returned data shares no ids with anything already in the store, and kanban
@@ -147,6 +161,7 @@ export function rekey(payload: TransferPayload): RekeyResult {
       id: taskIdMap.get(t.id) as TaskId,
       boardId,
       columnId,
+      notes: rekeyNotes(t.notes),
     };
   });
 
