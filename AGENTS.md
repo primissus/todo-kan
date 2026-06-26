@@ -166,17 +166,26 @@ src/
   `features/TaskDialog.tsx` — a view/edit modal that opens **read-only**
   (title heading, Markdown description, due date + labels for reading, the
   `features/NoteThread.tsx` discussion below — and **Status + Reminder as live controls**
-  even in the read-only view, the two common quick edits). **Shift+E** / the Edit button
-  reveal the full form, whose fields **commit live** to the store (no Save/Discard); **Shift+C**
-  focuses the comment box (via NoteThread's `composeRef`). **⌘/Ctrl+Enter** commits &
-  closes (fields auto-save, so it's just "done"; skipped via `e.defaultPrevented`
-  when a child note box submits a comment on the same chord). These
-  modal-local shortcuts (`onKeyDown` on `DialogContent`, guarded while typing) live
-  here, not in `useGlobalKeymap`/`keymap.ts` — only `f` hint mode reaches in (the
-  overlay scopes its labels to the open dialog).
-  **Esc** steps out of a focused field first (blurs to the `contentRef`, nothing is
-  lost — fields auto-save) and only closes on a second Esc with no field focused;
-  `editMode` resets when the dialog **closes**. Creating a
+  even in the read-only view, committed immediately). **Shift+E** / the Edit button
+  reveal the full form — a **buffered `react-hook-form` draft** (`useForm` +
+  `Controller` for the Select/`DateTimePicker`/`TagInput`): edits stay provisional
+  and commit ONLY on save — the **Done editing** button or **⌘/Ctrl+Enter** (both
+  call `saveEdit = handleSubmit(...)`, which `editTask`s then drops back to
+  read-only). Entering edit `reset()`s the form from `snapshotOf(task)`;
+  `formState.isDirty` gates discard prompts. **Esc in the edit form cancels it** —
+  "Discard changes?" confirm when dirty, else straight back to read-only — and the
+  reminder requests notification permission on **save**, not per keystroke.
+  **Shift+C** focuses the comment box (via NoteThread's `composeRef`).
+  **⌘/Ctrl+Enter** is contextual: **save** in edit mode, **close** in read-only
+  (skipped via `e.defaultPrevented` when a child note box submits a comment on the
+  same chord). These modal-local shortcuts (`onKeyDown` on `DialogContent`, guarded
+  while typing) live here, not in `useGlobalKeymap`/`keymap.ts` — only `f` hint mode
+  reaches in (the overlay scopes its labels to the open dialog).
+  In the **read-only** view **Esc** steps out of a focused field first (blurs to the
+  `contentRef`; the live Status/Reminder controls auto-save, so nothing is lost) and
+  only closes on a second Esc with no field focused; closing while editing a dirty
+  draft (X / overlay) prompts the same discard confirm (`requestClose` checks
+  `editMode && isDirty`). `editMode` resets when the dialog **closes**. Creating a
   task still uses the buffered `TaskFormDialog`. Due date + reminder use
   `components/DateTimePicker.tsx`, a **dependency-free** shadcn-style
   Popover/calendar/time picker (pure math in `lib/datetime.ts`) — do NOT add

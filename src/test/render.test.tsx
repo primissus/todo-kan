@@ -133,7 +133,7 @@ describe('TodoView', () => {
 });
 
 describe('TaskDialog (read-only view → edit + discussion)', () => {
-  it('opens read-only (no form), then live-edits the title via Edit', async () => {
+  it('opens read-only, edits in a buffered form, commits on Done editing', async () => {
     const user = userEvent.setup();
     const id = useAppStore.getState().createBoard('todo');
     const t = useAppStore.getState().addTask(id, { title: 'Original' });
@@ -149,12 +149,64 @@ describe('TaskDialog (read-only view → edit + discussion)', () => {
     expect(screen.getByLabelText('Add a note')).toBeInTheDocument();
     expect(screen.queryByLabelText('Title')).toBeNull();
 
-    // Edit reveals the form; fields commit live.
+    // Edit reveals the form; typing edits a buffered draft — NOT the store yet.
     await user.click(screen.getByRole('button', { name: /Edit/ }));
     const titleInput = await screen.findByLabelText('Title');
     await user.clear(titleInput);
     await user.type(titleInput, 'Renamed');
+    expect(useAppStore.getState().tasks[t].title).toBe('Original');
+
+    // Done editing commits the draft and returns to read-only.
+    await user.click(screen.getByRole('button', { name: 'Done editing' }));
     expect(useAppStore.getState().tasks[t].title).toBe('Renamed');
+    expect(
+      await screen.findByRole('heading', { name: 'Renamed' }),
+    ).toBeInTheDocument();
+  });
+
+  it('⌘/Ctrl+Enter in the edit form saves the draft and returns to read-only', async () => {
+    const user = userEvent.setup();
+    const id = useAppStore.getState().createBoard('todo');
+    const t = useAppStore.getState().addTask(id, { title: 'Original' });
+    render(<TodoView boardId={id} />);
+
+    await user.click(screen.getByRole('button', { name: 'Open task' }));
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'E', shiftKey: true });
+    const titleInput = await screen.findByLabelText('Title');
+    await user.clear(titleInput);
+    await user.type(titleInput, 'Saved');
+    expect(useAppStore.getState().tasks[t].title).toBe('Original');
+
+    fireEvent.keyDown(titleInput, { key: 'Enter', metaKey: true });
+    // RHF handleSubmit is async, so the commit lands a microtask later.
+    await waitFor(() =>
+      expect(useAppStore.getState().tasks[t].title).toBe('Saved'),
+    );
+    // Back to read-only, dialog still open.
+    await waitFor(() => expect(screen.queryByLabelText('Title')).toBeNull());
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('Esc in the edit form prompts to discard a dirty draft, then reverts', async () => {
+    const user = userEvent.setup();
+    const id = useAppStore.getState().createBoard('todo');
+    const t = useAppStore.getState().addTask(id, { title: 'Original' });
+    render(<TodoView boardId={id} />);
+
+    await user.click(screen.getByRole('button', { name: 'Open task' }));
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'E', shiftKey: true });
+    const titleInput = await screen.findByLabelText('Title');
+    await user.type(titleInput, ' edited');
+
+    // Esc with a dirty draft → discard confirm.
+    fireEvent.keyDown(titleInput, { key: 'Escape' });
+    expect(await screen.findByText('Discard changes?')).toBeInTheDocument();
+
+    // Confirm discard → reverts to read-only; the store was never touched.
+    await user.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(useAppStore.getState().tasks[t].title).toBe('Original');
+    await waitFor(() => expect(screen.queryByLabelText('Title')).toBeNull());
+    expect(screen.getByRole('heading', { name: 'Original' })).toBeInTheDocument();
   });
 
   it('⌘/Ctrl+Enter closes the task dialog', async () => {
@@ -180,7 +232,8 @@ describe('TaskDialog (read-only view → edit + discussion)', () => {
     expect(screen.queryByLabelText('Title')).toBeNull();
 
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'E', shiftKey: true });
-    expect(await screen.findByLabelText('Title')).toBeInTheDocument();
+    // The buffered draft is seeded from the task (reset(snapshot)).
+    expect(await screen.findByLabelText('Title')).toHaveValue('Original');
   });
 
   it('Shift+C focuses the comment box', async () => {
@@ -196,7 +249,7 @@ describe('TaskDialog (read-only view → edit + discussion)', () => {
     expect(screen.getByLabelText('Add a note')).toHaveFocus();
   });
 
-  it('Esc steps out of a focused field first, then closes', async () => {
+  it('Esc steps out of a focused field first, then closes (read-only)', async () => {
     const user = userEvent.setup();
     const id = useAppStore.getState().createBoard('todo');
     useAppStore.getState().addTask(id, { title: 'Original' });
@@ -205,20 +258,19 @@ describe('TaskDialog (read-only view → edit + discussion)', () => {
     await user.click(screen.getByRole('button', { name: 'Open task' }));
     await screen.findByRole('heading', { name: 'Original' });
 
-    // Enter edit mode and focus the title field.
-    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'E', shiftKey: true });
-    const title = await screen.findByLabelText('Title');
-    title.focus();
-    expect(title).toHaveFocus();
+    // Focus the comment box — a field in the read-only view.
+    const note = screen.getByLabelText('Add a note');
+    note.focus();
+    expect(note).toHaveFocus();
 
     // First Esc: field loses focus, dialog stays open.
-    fireEvent.keyDown(title, { key: 'Escape' });
-    expect(screen.getByLabelText('Title')).toBeInTheDocument();
-    expect(title).not.toHaveFocus();
+    fireEvent.keyDown(note, { key: 'Escape' });
+    expect(note).not.toHaveFocus();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
 
     // Second Esc (nothing focused): dialog closes.
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
-    await waitFor(() => expect(screen.queryByLabelText('Title')).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
   it('exposes a live Reminder control in the read-only view (no edit needed)', async () => {

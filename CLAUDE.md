@@ -86,23 +86,32 @@ After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and
   is a heading, the description renders **Markdown** (see below), due date + labels
   show for reading, and **Status + Reminder stay LIVE controls in the read-only view**
   (the two most common quick edits — the `Select` and the `timeFirst` `DateTimePicker`,
-  committing via the same store actions as edit mode), with the discussion thread below.
-  **Shift+E** or the **Edit** button reveals the form; its fields (title,
-  description, status, due date, reminder, labels) **commit LIVE** to the store as
-  you edit (no Save/Discard). **Shift+C** focuses the comment box (NoteThread
-  exposes a `composeRef`). **⌘/Ctrl+Enter** is *done* — since every field
-  auto-saves it just commits & closes (skipped when a child already handled the
-  chord, e.g. the note box submitting a comment via `e.defaultPrevented`). These
+  committing immediately), with the discussion thread below.
+  **Shift+E** or the **Edit** button reveals the form. Unlike the read-only quick
+  controls, the **edit form is a BUFFERED draft** (`react-hook-form`, `useForm` +
+  `Controller` for the Select/pickers/`TagInput`): edits stay provisional and only
+  **commit to the store on save** — the **Done editing** button or **⌘/Ctrl+Enter**
+  (both call `saveEdit = form.handleSubmit(...)`). Entering edit `reset()`s the form
+  from a `snapshotOf(task)`; `formState.isDirty` gates the discard prompts.
+  **Escape in the edit form cancels it** → a "Discard changes?" confirm when the
+  draft is dirty (else straight back to read-only); the reminder asks for
+  notification permission on **save** (not on each keystroke). **Shift+C** focuses
+  the comment box (NoteThread exposes a `composeRef`). **⌘/Ctrl+Enter** is
+  contextual — it **saves the draft** in edit mode and **closes** in read-only
+  (skipped when a child already handled the chord, e.g. the note box submitting a
+  comment via `e.defaultPrevented`). These
   shortcuts (⌘/Ctrl+Enter, Shift+E, Shift+C) are **modal-local** (`onKeyDown` on
   `DialogContent`, guarded against firing while typing) — NOT in `useGlobalKeymap`
   and NOT in the `keymap.ts` cheat sheet (only `f` hint mode reaches in from the
   global keymap).
-  **Escape** first *steps out* of a focused field (`onEscapeKeyDown` blurs it by
-  focusing the `contentRef`; nothing is lost since fields auto-save) and only
-  **closes** on a second Escape with no field focused. "Done editing" → read-only
-  view; "Done" → close. **Create** still uses the buffered
-  `src/features/TaskFormDialog.tsx` (Add button). There is no separate notes dialog
-  or `notesId` anymore.
+  In the **read-only** view **Escape** first *steps out* of a focused field
+  (`onEscapeKeyDown` blurs it by focusing the `contentRef`; the live Status/Reminder
+  controls auto-save, so nothing is lost) and only **closes** on a second Escape
+  with no field focused. Closing while editing a dirty draft (the **X** / overlay)
+  prompts the same discard confirm (`requestClose` checks `editMode && isDirty`).
+  "Done editing" → save → read-only; "Done" → close. **Create** still uses the
+  buffered `src/features/TaskFormDialog.tsx` (Add button). There is no separate
+  notes dialog or `notesId` anymore.
 - **Task notes/discussion**: each task carries a `notes: Note[]` thread (store
   actions `addNote`/`editNote`/`deleteNote`). The thread UI is
   `src/features/NoteThread.tsx`, rendered inside `TaskDialog`; notes commit

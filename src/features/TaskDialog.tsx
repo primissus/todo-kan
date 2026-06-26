@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from 'react';
 import { toast } from 'sonner';
+import { Controller, useForm } from 'react-hook-form';
 import { Archive, CalendarClock, Pencil, Trash2 } from 'lucide-react';
 import {
   Dialog,
@@ -37,7 +38,37 @@ import {
   requestNotificationPermission,
 } from '@/lib/notifications';
 import { useAppStore } from '@/store/useAppStore';
-import type { Column, ColumnId } from '@/lib/types/domain';
+import type { Column, ColumnId, Task } from '@/lib/types/domain';
+
+/** The buffered draft the edit form (react-hook-form) edits before saving. */
+interface EditValues {
+  title: string;
+  description: string;
+  columnId: ColumnId | null;
+  dueAt: number | null;
+  remindAt: number | null;
+  tags: string[];
+}
+
+const EMPTY_EDIT: EditValues = {
+  title: '',
+  description: '',
+  columnId: null,
+  dueAt: null,
+  remindAt: null,
+  tags: [],
+};
+
+function snapshotOf(task: Task): EditValues {
+  return {
+    title: task.title,
+    description: task.description,
+    columnId: task.columnId,
+    dueAt: task.dueAt ?? null,
+    remindAt: task.remindAt ?? null,
+    tags: task.tags,
+  };
+}
 
 export interface TaskDialogProps {
   /** Task to view/edit; read live from the store. */
@@ -53,14 +84,13 @@ export interface TaskDialogProps {
  * Unified task view/edit modal — opened on Enter / click / the card's open button.
  * It opens **read-only**: title, Markdown description, due date and labels are shown
  * for reading, with the discussion thread below. **Status and Reminder stay live
- * controls in the read-only view** (the two most common quick edits). Press
- * **Shift+E** (or the Edit button) to reveal the full form, whose fields commit LIVE
- * to the store as you edit (no Save/Discard — the only unsaved state is an
- * in-progress note draft, which prompts on close).
- * **Shift+C** jumps to the comment box; **"Done editing"** returns to the
- * read-only view. **Escape** first steps out of a focused field (nothing is lost —
- * fields auto-save), then closes the dialog on a second Escape when no field is
- * focused.
+ * controls in the read-only view** (the two most common quick edits, committed
+ * immediately). Press **Shift+E** (or the Edit button) to reveal the full form,
+ * which is a **buffered react-hook-form draft**: edits stay provisional and only
+ * commit to the store on **"Done editing"** or **⌘/Ctrl+Enter**. **Escape** in the
+ * edit form cancels it — prompting a discard confirm when the draft is dirty — and
+ * returns to the read-only view. **Shift+C** jumps to the comment box. In the
+ * read-only view, Escape first steps out of a focused field, then closes.
  */
 export function TaskDialog({
   taskId,
@@ -77,9 +107,16 @@ export function TaskDialog({
   const [editMode, setEditMode] = useState(false);
   const [noteUnsaved, setNoteUnsaved] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [confirmCancelEdit, setConfirmCancelEdit] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const composeRef = useRef<HTMLTextAreaElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+
+  // Edit mode is a BUFFERED form: fields edit this local draft and only commit to
+  // the store on save (Done editing / ⌘+Enter). `reset(snapshot)` seeds it from the
+  // task on entering edit; `isDirty` gates the discard-confirm on Esc / close.
+  const form = useForm<EditValues>({ defaultValues: EMPTY_EDIT });
+  const { isDirty } = form.formState;
 
   // Reset to read-only when the dialog CLOSES, so the next open's first paint is
   // already the read-only view. (Resetting on open runs after paint → a one-frame
@@ -97,8 +134,7 @@ export function TaskDialog({
 
   // Setting a reminder asks for notification permission on this user gesture, and
   // explains when reminders can't actually be delivered.
-  const onReminderChange = async (value: number | null) => {
-    patch({ remindAt: value });
+  const ensureReminderPermission = async (value: number | null) => {
     if (value == null) return;
     const perm = notificationPermission();
     if (perm === 'unsupported') {
@@ -115,8 +151,45 @@ export function TaskDialog({
     }
   };
 
+  // The read-only Reminder is a live control (commits immediately); the edit
+  // form's Reminder is buffered and asks for permission on save instead.
+  const onReminderChange = (value: number | null) => {
+    patch({ remindAt: value });
+    void ensureReminderPermission(value);
+  };
+
+  const enterEdit = () => {
+    form.reset(snapshotOf(task));
+    setEditMode(true);
+  };
+
+  // Drop the draft and return to the read-only view (no commit).
+  const cancelEdit = () => {
+    form.reset(snapshotOf(task));
+    setEditMode(false);
+  };
+
+  // Commit the draft to the store, then return to read-only — the only save path
+  // (shared by the Done-editing button and ⌘/Ctrl+Enter).
+  const saveEdit = form.handleSubmit((values) => {
+    const data: Parameters<typeof editTask>[1] = {
+      title: values.title,
+      description: values.description,
+      dueAt: values.dueAt,
+      remindAt: values.remindAt,
+      tags: values.tags,
+    };
+    if (columns) data.columnId = values.columnId ?? columns[0]?.id ?? null;
+    editTask(taskId, data);
+    if (values.remindAt != null && values.remindAt !== (task.remindAt ?? null)) {
+      void ensureReminderPermission(values.remindAt);
+    }
+    form.reset(values); // the saved draft is the new baseline (clears isDirty)
+    setEditMode(false);
+  });
+
   const requestClose = () => {
-    if (noteUnsaved) setConfirmClose(true);
+    if ((editMode && isDirty) || noteUnsaved) setConfirmClose(true);
     else onOpenChange(false);
   };
 
@@ -124,12 +197,14 @@ export function TaskDialog({
   // Shift+C → jump to the comment box. Ignored while typing in a field so they
   // don't eat the keystroke.
   const onShortcut = (e: ReactKeyboardEvent<HTMLDivElement>) => {
-    // ⌘/Ctrl+Enter commits & closes — fields already auto-save, so "save" is just
-    // "done". Skip if a child already handled it (the NoteThread compose/edit box
-    // submits a note on the same chord and calls preventDefault first).
+    // ⌘/Ctrl+Enter is "save & done": in edit mode it commits the draft (the only
+    // other save path is the Done-editing button); in read-only it just closes.
+    // Skip if a child already handled it (the NoteThread compose/edit box submits
+    // a note on the same chord and calls preventDefault first).
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && !e.defaultPrevented) {
       e.preventDefault();
-      requestClose();
+      if (editMode) saveEdit();
+      else requestClose();
       return;
     }
     if (!e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -146,7 +221,7 @@ export function TaskDialog({
     if (k === 'e') {
       if (editMode) return;
       e.preventDefault();
-      setEditMode(true);
+      enterEdit();
     } else {
       e.preventDefault();
       composeRef.current?.focus();
@@ -166,9 +241,17 @@ export function TaskDialog({
         className="sm:max-w-lg"
         onKeyDown={onShortcut}
         onEscapeKeyDown={(e) => {
-          // Esc "steps out" of a focused field first (without closing — fields
-          // already auto-save, so nothing is lost); it only closes the dialog
-          // when no field is focused (a second Esc, after focus moved off).
+          // In the edit form, Esc cancels editing: prompt to discard when the
+          // draft is dirty, otherwise drop straight back to the read-only view.
+          if (editMode) {
+            e.preventDefault();
+            if (isDirty) setConfirmCancelEdit(true);
+            else cancelEdit();
+            return;
+          }
+          // Read-only: Esc "steps out" of a focused field first (without closing —
+          // the live Status/Reminder controls auto-save, so nothing is lost); it
+          // only closes when no field is focused (a second Esc, after focus moved).
           const ae = document.activeElement as HTMLElement | null;
           const inField =
             !!ae &&
@@ -197,9 +280,8 @@ export function TaskDialog({
                 <Input
                   id="task-title"
                   autoFocus
-                  value={task.title}
-                  onChange={(e) => patch({ title: e.target.value })}
                   placeholder="What needs doing?"
+                  {...form.register('title')}
                 />
               </div>
 
@@ -207,63 +289,86 @@ export function TaskDialog({
                 <Label htmlFor="task-desc">Description</Label>
                 <Textarea
                   id="task-desc"
-                  value={task.description}
-                  onChange={(e) => patch({ description: e.target.value })}
                   placeholder="Optional details…"
                   rows={3}
+                  {...form.register('description')}
                 />
               </div>
 
               {columns ? (
                 <div className="grid gap-2">
                   <Label htmlFor="task-status">Status</Label>
-                  <Select
-                    value={task.columnId ?? columns[0]?.id}
-                    onValueChange={(v) => patch({ columnId: v as ColumnId })}
-                  >
-                    <SelectTrigger id="task-status" className="w-full">
-                      <SelectValue placeholder="Select a column" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {columns.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Controller
+                    control={form.control}
+                    name="columnId"
+                    render={({ field }) => (
+                      <Select
+                        value={field.value ?? columns[0]?.id}
+                        onValueChange={(v) => field.onChange(v as ColumnId)}
+                      >
+                        <SelectTrigger id="task-status" className="w-full">
+                          <SelectValue placeholder="Select a column" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {columns.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.title}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
                 </div>
               ) : null}
 
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="grid gap-2">
                   <Label>Due date</Label>
-                  <DateTimePicker
-                    label="Due date"
-                    placeholder="No due date"
-                    value={task.dueAt ?? null}
-                    onChange={(v) => patch({ dueAt: v })}
+                  <Controller
+                    control={form.control}
+                    name="dueAt"
+                    render={({ field }) => (
+                      <DateTimePicker
+                        label="Due date"
+                        placeholder="No due date"
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
+                    )}
                   />
                 </div>
                 <div className="grid gap-2">
                   <Label>Reminder</Label>
-                  <DateTimePicker
-                    label="Reminder"
-                    placeholder="No reminder"
-                    timeFirst
-                    value={task.remindAt ?? null}
-                    onChange={onReminderChange}
+                  <Controller
+                    control={form.control}
+                    name="remindAt"
+                    render={({ field }) => (
+                      <DateTimePicker
+                        label="Reminder"
+                        placeholder="No reminder"
+                        timeFirst
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
+                    )}
                   />
                 </div>
               </div>
 
               <div className="grid gap-2">
                 <Label>Labels</Label>
-                <TagInput
-                  value={task.tags}
-                  onChange={(tags) => patch({ tags })}
-                  suggestions={allTags}
-                  placeholder="Add labels…"
+                <Controller
+                  control={form.control}
+                  name="tags"
+                  render={({ field }) => (
+                    <TagInput
+                      value={field.value}
+                      onChange={field.onChange}
+                      suggestions={allTags}
+                      placeholder="Add labels…"
+                    />
+                  )}
                 />
               </div>
             </>
@@ -278,7 +383,7 @@ export function TaskDialog({
               remindAt={task.remindAt ?? null}
               onReminderChange={onReminderChange}
               tags={task.tags}
-              onEdit={() => setEditMode(true)}
+              onEdit={enterEdit}
             />
           )}
 
@@ -326,7 +431,7 @@ export function TaskDialog({
             Archive
           </Button>
           {editMode ? (
-            <Button type="button" size="sm" onClick={() => setEditMode(false)}>
+            <Button type="button" size="sm" onClick={() => saveEdit()}>
               Done editing
             </Button>
           ) : (
@@ -341,10 +446,20 @@ export function TaskDialog({
         open={confirmClose}
         onOpenChange={setConfirmClose}
         title="Discard changes?"
-        description="Your unsaved note text will be lost."
+        description="Your unsaved changes will be lost."
         confirmLabel="Discard"
         destructive
         onConfirm={() => onOpenChange(false)}
+      />
+
+      <ConfirmModal
+        open={confirmCancelEdit}
+        onOpenChange={setConfirmCancelEdit}
+        title="Discard changes?"
+        description="Your edits to this task will be lost."
+        confirmLabel="Discard"
+        destructive
+        onConfirm={cancelEdit}
       />
 
       <ConfirmModal
