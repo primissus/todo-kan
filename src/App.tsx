@@ -10,6 +10,7 @@ import { KeyboardStatus } from '@/components/KeyboardStatus';
 import { CommandLine } from '@/components/CommandLine';
 import { useSystemThemeSync } from '@/hooks/useTheme';
 import { useGlobalKeymap } from '@/hooks/useGlobalKeymap';
+import { useReminderScheduler } from '@/hooks/useReminderScheduler';
 import { goHome, useRoute } from '@/lib/router';
 import { useAppStore } from '@/store/useAppStore';
 import { useUiStore } from '@/store/useUiStore';
@@ -20,6 +21,7 @@ import { KanbanView } from '@/features/kanban/KanbanView';
 export default function App() {
   useSystemThemeSync();
   useGlobalKeymap();
+  useReminderScheduler();
   const route = useRoute();
   const setHelpOpen = useUiStore((s) => s.setHelpOpen);
   const [settingsOpen, setSettingsOpen] = useState(false);

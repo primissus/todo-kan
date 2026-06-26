@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { TagInput } from '@/components/TagInput';
+import { DateTimePicker } from '@/components/DateTimePicker';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import type { Column, ColumnId } from '@/lib/types/domain';
 
@@ -26,6 +27,8 @@ export interface TaskFormValues {
   description: string;
   tags: string[];
   columnId?: ColumnId | null;
+  /** Due date/time (unix ms) or null when unset. */
+  dueAt: number | null;
 }
 
 export interface TaskFormDialogProps {
@@ -60,12 +63,14 @@ export function TaskFormDialog({
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [columnId, setColumnId] = useState<ColumnId | null>(null);
+  const [dueAt, setDueAt] = useState<number | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   const baseTitle = initial?.title ?? '';
   const baseDescription = initial?.description ?? '';
   const baseTags = initial?.tags ?? [];
   const baseColumnId = initial?.columnId ?? columns?.[0]?.id ?? null;
+  const baseDueAt = initial?.dueAt ?? null;
 
   useEffect(() => {
     if (open) {
@@ -73,6 +78,7 @@ export function TaskFormDialog({
       setDescription(baseDescription);
       setTags(baseTags);
       setColumnId(baseColumnId);
+      setDueAt(baseDueAt);
       setConfirmDiscard(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -86,6 +92,7 @@ export function TaskFormDialog({
     description.trim() !== baseDescription.trim() ||
     tags.length !== baseTags.length ||
     tags.some((t, i) => t !== baseTags[i]) ||
+    dueAt !== baseDueAt ||
     (!!columns && columnId !== baseColumnId);
 
   const build = (): TaskFormValues => ({
@@ -93,6 +100,7 @@ export function TaskFormDialog({
     description: description.trim(),
     tags,
     columnId: columns ? columnId : null,
+    dueAt,
   });
 
   const submit = () => {
@@ -177,6 +185,16 @@ export function TaskFormDialog({
               </Select>
             </div>
           ) : null}
+
+          <div className="grid gap-2">
+            <Label>Due date</Label>
+            <DateTimePicker
+              label="Due date"
+              placeholder="No due date"
+              value={dueAt}
+              onChange={setDueAt}
+            />
+          </div>
 
           <div className="grid gap-2">
             <Label>Labels</Label>

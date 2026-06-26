@@ -1,12 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Archive, MessageSquare, Pencil } from 'lucide-react';
+import { Archive, Bell, CalendarClock, MessageSquare, SquarePen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Linkify } from '@/components/Linkify';
 import { cn } from '@/lib/utils';
+import { formatDateTime } from '@/lib/datetime';
 import { useAppStore } from '@/store/useAppStore';
-import { useUiStore } from '@/store/useUiStore';
 import { useIsMoveTarget, useIsSelected } from '@/hooks/useSelection';
 import type { Task } from '@/lib/types/domain';
 
@@ -30,7 +30,6 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
     data: { type: 'card', columnId: task.columnId },
   });
   const archiveTask = useAppStore((s) => s.archiveTask);
-  const setNotesId = useUiStore((s) => s.setNotesId);
   const selected = useIsSelected(task.id);
   const moveTarget = useIsMoveTarget(task.id);
   const noteCount = task.notes?.length ?? 0;
@@ -70,9 +69,19 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
       {...(overlay ? {} : listeners)}
     >
       <div className="flex items-start gap-2">
-        <p className="min-w-0 flex-1 text-sm font-medium break-words">
-          {task.title}
-        </p>
+        {overlay ? (
+          <p className="min-w-0 flex-1 text-sm font-medium break-words">
+            {task.title}
+          </p>
+        ) : (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="min-w-0 flex-1 cursor-pointer text-left text-sm font-medium break-words hover:underline"
+          >
+            {task.title || 'Untitled task'}
+          </button>
+        )}
         {!overlay && (
           <div className="flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover/card:opacity-100">
             {noteCount === 0 && (
@@ -82,7 +91,7 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
                 className="size-7"
                 aria-label="Notes"
                 {...stopDrag}
-                onClick={() => setNotesId(task.id)}
+                onClick={onEdit}
               >
                 <MessageSquare className="size-3.5" />
               </Button>
@@ -91,11 +100,11 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
               variant="ghost"
               size="icon"
               className="size-7"
-              aria-label="Edit card"
+              aria-label="Open card"
               {...stopDrag}
               onClick={onEdit}
             >
-              <Pencil className="size-3.5" />
+              <SquarePen className="size-3.5" />
             </Button>
             <Button
               variant="ghost"
@@ -117,6 +126,30 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
         </p>
       ) : null}
 
+      {(task.dueAt != null || task.remindAt != null) && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+          {task.dueAt != null && (
+            <span
+              className={cn(
+                'inline-flex items-center gap-1 rounded px-1.5 py-0.5',
+                task.dueAt < Date.now()
+                  ? 'bg-destructive/15 text-destructive'
+                  : 'bg-muted text-muted-foreground',
+              )}
+            >
+              <CalendarClock className="size-3" />
+              {formatDateTime(task.dueAt)}
+            </span>
+          )}
+          {task.remindAt != null && (
+            <Bell
+              className="size-3 text-muted-foreground"
+              aria-label="Reminder set"
+            />
+          )}
+        </div>
+      )}
+
       {task.tags.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {task.tags.map((tag) => (
@@ -137,7 +170,7 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
             aria-label={`Notes (${noteCount})`}
             className="inline-flex items-center gap-1 rounded text-xs text-muted-foreground hover:text-foreground"
             {...(overlay ? {} : stopDrag)}
-            onClick={overlay ? undefined : () => setNotesId(task.id)}
+            onClick={overlay ? undefined : onEdit}
           >
             <MessageSquare className="size-3.5" />
             <span className="tabular-nums">{noteCount}</span>

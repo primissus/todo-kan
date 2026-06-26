@@ -5,6 +5,7 @@ import {
   type DragEndEvent,
   KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
@@ -19,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { BoardHeader } from '@/features/BoardHeader';
 import { TaskRow } from '@/features/todo/TaskRow';
 import { TaskFormDialog } from '@/features/TaskFormDialog';
-import { NotesDialog } from '@/features/NotesDialog';
+import { TaskDialog } from '@/features/TaskDialog';
 import { ArchivedTasksDrawer } from '@/features/ArchivedTasksDrawer';
 import { TypeToConfirmModal } from '@/components/TypeToConfirmModal';
 import { ConfirmModal } from '@/components/ConfirmModal';
@@ -38,7 +39,6 @@ export function TodoView({ boardId }: TodoViewProps) {
   const allTags = useAllTags();
 
   const addTask = useAppStore((s) => s.addTask);
-  const editTask = useAppStore((s) => s.editTask);
   const setShowCompleted = useAppStore((s) => s.setShowCompleted);
   const reorderTaskInBoard = useAppStore((s) => s.reorderTaskInBoard);
   const clearBoard = useAppStore((s) => s.clearBoard);
@@ -48,8 +48,6 @@ export function TodoView({ boardId }: TodoViewProps) {
   const setNewOpen = useUiStore((s) => s.setNewOpen);
   const editId = useUiStore((s) => s.editId);
   const setEditId = useUiStore((s) => s.setEditId);
-  const notesId = useUiStore((s) => s.notesId);
-  const setNotesId = useUiStore((s) => s.setNotesId);
   const deleteId = useUiStore((s) => s.deleteId);
   const setDeleteId = useUiStore((s) => s.setDeleteId);
   const archivedOpen = useUiStore((s) => s.archivedOpen);
@@ -58,7 +56,12 @@ export function TodoView({ boardId }: TodoViewProps) {
   const [clearOpen, setClearOpen] = useState(false);
 
   const sensors = useSensors(
+    // Mouse: 5px drag threshold. Touch: 220ms long-press (6px tolerance) so a
+    // quick swipe scrolls the list while a hold picks up the row to reorder.
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 220, tolerance: 6 },
+    }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
@@ -70,7 +73,6 @@ export function TodoView({ boardId }: TodoViewProps) {
     : active.filter((t) => !t.completed);
   const archivedCount = tasks.filter((t) => t.archived).length;
   const editTaskObj = editId ? tasks.find((t) => t.id === editId) : undefined;
-  const notesTaskObj = notesId ? tasks.find((t) => t.id === notesId) : undefined;
   const deleteTaskObj = deleteId
     ? tasks.find((t) => t.id === deleteId)
     : undefined;
@@ -157,41 +159,16 @@ export function TodoView({ boardId }: TodoViewProps) {
             title: v.title,
             description: v.description,
             tags: v.tags,
+            dueAt: v.dueAt ?? undefined,
           })
         }
       />
 
-      <TaskFormDialog
+      <TaskDialog
+        taskId={editId}
         open={!!editTaskObj}
         onOpenChange={(o) => !o && setEditId(null)}
-        mode="edit"
-        heading="Edit task"
-        initial={
-          editTaskObj
-            ? {
-                title: editTaskObj.title,
-                description: editTaskObj.description,
-                tags: editTaskObj.tags,
-              }
-            : undefined
-        }
         allTags={allTags}
-        onSubmit={(v) => {
-          if (editId) {
-            editTask(editId, {
-              title: v.title,
-              description: v.description,
-              tags: v.tags,
-            });
-          }
-          setEditId(null);
-        }}
-      />
-
-      <NotesDialog
-        taskId={notesId}
-        open={!!notesTaskObj}
-        onOpenChange={(o) => !o && setNotesId(null)}
       />
 
       <ArchivedTasksDrawer

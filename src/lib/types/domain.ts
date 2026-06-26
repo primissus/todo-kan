@@ -47,6 +47,10 @@ export interface Task {
   columnId: ColumnId | null; // kanban only; null for todo
   archived: boolean; // task-level archive
   notes: Note[]; // threaded notes/comments; [] when none
+  /** Due date/time (unix ms). Absent = no due date. */
+  dueAt?: number;
+  /** Reminder time (unix ms) — when a notification should fire. Absent = none. */
+  remindAt?: number;
   createdAt: number;
   updatedAt: number;
 }

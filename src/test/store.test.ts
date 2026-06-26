@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useAppStore } from '@/store/useAppStore';
 import { buildExport, parseImport, rekey } from '@/lib/transfer';
-import { filterBySearch } from '@/lib/search';
+import { filterBySearch, parseQuery } from '@/lib/search';
 
 const s = () => useAppStore.getState();
 const task = (id: string) => s().tasks[id];
@@ -214,5 +214,51 @@ describe('search', () => {
 
   it('empty query returns all', () => {
     expect(filterBySearch(items, '')).toHaveLength(2);
+  });
+
+  it('parses a leading type:task / type:list filter (and strips it)', () => {
+    expect(parseQuery('type:task milk')).toEqual({
+      term: 'milk',
+      tagOnly: false,
+      kind: 'task',
+    });
+    expect(parseQuery('type:list')).toEqual({
+      term: '',
+      tagOnly: false,
+      kind: 'list',
+    });
+    // type: combines with the #tag prefix
+    expect(parseQuery('type:task #urgent')).toEqual({
+      term: 'urgent',
+      tagOnly: true,
+      kind: 'task',
+    });
+    // no prefix → no kind, plain term
+    expect(parseQuery('design')).toEqual({ term: 'design', tagOnly: false });
+  });
+});
+
+describe('task scheduling (dueAt / remindAt)', () => {
+  it('stores dueAt/remindAt on add and reads them back', () => {
+    const id = s().createBoard('todo');
+    const t = s().addTask(id, { title: 'x', dueAt: 1000, remindAt: 900 });
+    expect(task(t).dueAt).toBe(1000);
+    expect(task(t).remindAt).toBe(900);
+  });
+
+  it('edits and clears dueAt/remindAt (null clears, undefined leaves as-is)', () => {
+    const id = s().createBoard('todo');
+    const t = s().addTask(id, { title: 'x', dueAt: 1000, remindAt: 900 });
+
+    s().editTask(t, { dueAt: 2000 });
+    expect(task(t).dueAt).toBe(2000);
+    expect(task(t).remindAt).toBe(900); // untouched
+
+    s().editTask(t, { dueAt: null });
+    expect(task(t).dueAt).toBeUndefined();
+    expect(task(t).remindAt).toBe(900); // still untouched
+
+    s().editTask(t, { remindAt: null });
+    expect(task(t).remindAt).toBeUndefined();
   });
 });

@@ -22,6 +22,8 @@ export interface TaskInput {
   description?: string;
   tags?: string[];
   columnId?: ColumnId | null;
+  dueAt?: number;
+  remindAt?: number;
 }
 
 export interface TaskPatch {
@@ -30,6 +32,9 @@ export interface TaskPatch {
   tags?: string[];
   columnId?: ColumnId | null;
   completed?: boolean;
+  /** `number` sets it, `null` clears it, `undefined` leaves it unchanged. */
+  dueAt?: number | null;
+  remindAt?: number | null;
 }
 
 export interface BoardMetaPatch {
@@ -241,6 +246,8 @@ export const useAppStore = create<AppState>()(
             columnId,
             archived: false,
             notes: [],
+            dueAt: input.dueAt,
+            remindAt: input.remindAt,
             createdAt: t,
             updatedAt: t,
           };
@@ -258,6 +265,10 @@ export const useAppStore = create<AppState>()(
           if (patch.description !== undefined) tk.description = patch.description;
           if (patch.tags !== undefined) tk.tags = patch.tags;
           if (patch.completed !== undefined) tk.completed = patch.completed;
+          // `null` clears, a number sets; `undefined` leaves the field as-is.
+          if (patch.dueAt !== undefined) tk.dueAt = patch.dueAt ?? undefined;
+          if (patch.remindAt !== undefined)
+            tk.remindAt = patch.remindAt ?? undefined;
           if (patch.columnId !== undefined && patch.columnId !== tk.columnId) {
             tk.columnId = patch.columnId;
             // Move to the end of the new column's group for a tidy result.
@@ -428,10 +439,14 @@ export const useAppStore = create<AppState>()(
     })),
     {
       name: STORAGE_KEYS.app,
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => storage),
-      // v1 → v2: tasks gained a `notes` thread. Backfill `[]` so every loaded
-      // task is normalized (render/read code can treat `notes` as always-present).
+      // Migrations are cumulative (each runs for any persisted version below it):
+      //   v1 → v2: tasks gained a `notes` thread → backfill `[]`.
+      //   v2 → v3: tasks gained optional `dueAt`/`remindAt` — no backfill needed
+      //            (absent === "none"); the version bump just records the change.
+      // Backfilling `notes` keeps every loaded task normalized so read/render code
+      // can treat `notes` as always-present regardless of the file's age.
       migrate: (persisted) => {
         const s = persisted as Partial<DataState> | undefined;
         if (s?.tasks) {

@@ -518,7 +518,11 @@ export function useGlobalKeymap(): void {
   const routeKey = route.name === 'board' ? `board:${route.id}` : 'home';
   useEffect(() => {
     const ui = useUiStore.getState();
-    ui.setSelected(null);
+    // A Home search result that targets a task on another board stashes its id in
+    // `pendingSelectId` and navigates; apply it here (after the reset) so the
+    // destination view scrolls to / highlights that task on arrival.
+    ui.setSelected(ui.pendingSelectId ?? null);
+    ui.setPendingSelect(null);
     if (ui.moveMode) ui.endMove();
     ui.resetModals();
   }, [routeKey]);

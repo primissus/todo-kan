@@ -39,6 +39,12 @@ export interface UiState {
   selectedId: string | null;
   setSelected: (id: string | null) => void;
 
+  /** A task to focus AFTER the next route change applies (used when a Home search
+   *  result jumps to a task on another board). The route-change effect in
+   *  useGlobalKeymap consumes it: it resets the cursor, then re-selects this id. */
+  pendingSelectId: string | null;
+  setPendingSelect: (id: string | null) => void;
+
   /** Move-mode: relocate the selected item live; Enter commits, Esc reverts. */
   moveMode: boolean;
   moveSnapshot: MoveSnapshot | null;
@@ -71,11 +77,9 @@ export interface UiState {
   // prop-drilling.
   newOpen: boolean;
   setNewOpen: (v: boolean) => void;
+  /** Task whose detail dialog (edit + due/reminder + discussion thread) is open. */
   editId: string | null;
   setEditId: (id: string | null) => void;
-  /** Task whose note thread is open; null = closed. */
-  notesId: string | null;
-  setNotesId: (id: string | null) => void;
   /** Task pending a (confirmed) Shift+D delete; null = no confirm open. */
   deleteId: string | null;
   setDeleteId: (id: string | null) => void;
@@ -96,6 +100,7 @@ export interface UiState {
 
 export const initialUiState = {
   selectedId: null,
+  pendingSelectId: null,
   moveMode: false,
   moveSnapshot: null,
   vimEnabled: false,
@@ -105,7 +110,6 @@ export const initialUiState = {
   hintsActive: false,
   newOpen: false,
   editId: null,
-  notesId: null,
   deleteId: null,
   archivedOpen: false,
   kanbanColumnsOpen: false,
@@ -118,6 +122,7 @@ export const useUiStore = create<UiState>((set) => ({
   vimEnabled: readVimEnabled(),
 
   setSelected: (id) => set({ selectedId: id }),
+  setPendingSelect: (id) => set({ pendingSelectId: id }),
 
   beginMove: (snap) => set({ moveMode: true, moveSnapshot: snap }),
   endMove: () => set({ moveMode: false, moveSnapshot: null }),
@@ -143,7 +148,6 @@ export const useUiStore = create<UiState>((set) => ({
 
   setNewOpen: (v) => set({ newOpen: v }),
   setEditId: (id) => set({ editId: id }),
-  setNotesId: (id) => set({ notesId: id }),
   setDeleteId: (id) => set({ deleteId: id }),
   setArchivedOpen: (v) => set({ archivedOpen: v }),
   setKanbanColumnsOpen: (v) => set({ kanbanColumnsOpen: v }),
@@ -151,7 +155,6 @@ export const useUiStore = create<UiState>((set) => ({
     set({
       newOpen: false,
       editId: null,
-      notesId: null,
       deleteId: null,
       archivedOpen: false,
       kanbanColumnsOpen: false,

@@ -38,7 +38,9 @@ src/
     types/domain.ts              # normalized model (single source of truth)
     utils.ts (cn), id.ts, storage.ts, storageKeys.ts
     theme.ts                     # ported theme logic (families/modes/applyTheme)
-    search.ts                    # Fuse.js + "#tag" parsing
+    search.ts                    # Fuse.js + "#tag" + "type:task/list" parsing
+    datetime.ts                  # pure date/time helpers for the date-time picker
+    notifications.ts             # Web Notifications boundary (in-tab reminders)
     linkify.ts                   # pure URL tokenizer (bare URLs → link segments)
     transfer.ts                  # export/import (+ id re-keying, incl. notes)
     router.ts                    # tiny hash router
@@ -48,19 +50,20 @@ src/
   store/
     useAppStore.ts               # persisted Zustand store + ALL domain actions (persist + immer)
     useUiStore.ts                # NON-persisted ephemeral store (selection/move/overlay/modal flags)
-    selectors.ts                 # useOrderedBoards / useBoard / useBoardTasks / useAllTags
-  hooks/                         # useTheme, useDebouncedValue, useGlobalKeymap, useSelection
+    selectors.ts                 # useOrderedBoards / useBoard / useBoardTasks / useAllTasks / useAllTags
+  hooks/                         # useTheme, useDebouncedValue, useGlobalKeymap, useSelection, useReminderScheduler
   components/
     ui/                          # shadcn primitives (CLI-generated) — avoid hand-editing
     AppHeader is inline in App.tsx; SearchBar, SettingsDialog, ThemeControls,
     ConfirmModal, TypeToConfirmModal, TagInput (Floating UI), Tooltip (Floating UI),
-    ExportDialog, ImportDialog,
+    DateTimePicker (dependency-free Popover + calendar + time), ExportDialog, ImportDialog,
     CommandPalette (search), HelpDialog (? cheat sheet, mode-aware), HintOverlay (f hints),
     KeyboardStatus (move-mode banner + sr-only selection announcements),
     CommandLine (: command line — Vim-keys toggle + bottom-left mode indicator),
     Linkify (renders bare URLs in free text as anchors)
   features/
-    BoardHeader.tsx, TaskFormDialog.tsx, NotesDialog.tsx,
+    BoardHeader.tsx, TaskFormDialog.tsx (create), TaskDialog.tsx (unified view/edit
+    + due/reminder + discussion), NoteThread.tsx (the note thread, embedded in TaskDialog),
     ArchivedTasksDrawer.tsx                                        # shared by both views
     home/    HomePage, BoardCard
     todo/    TodoView, TaskRow
@@ -68,7 +71,7 @@ src/
   styles/ globals.css, theme.css
   test/   setup.ts, store.test.ts, notes.test.ts, render.test.tsx,
           keymap.test.tsx, keymapTable.test.ts, hints.test.ts,
-          linkify.test.ts, uiStore.test.ts
+          linkify.test.ts, datetime.test.ts, uiStore.test.ts
 ```
 
 ## Architecture (read before touching state/UI)
@@ -78,8 +81,10 @@ src/
   = `taskIds` filtered by `columnId`. Don't denormalize (don't nest tasks under
   boards in the store). A task's `notes: Note[]` thread is the one nested array
   (notes are scoped to their task, never addressed globally); `addNote`/`editNote`/
-  `deleteNote` are the store actions and they commit immediately. The `persist`
-  `version` is **2** — the v1→v2 `migrate` backfills `notes: []` on older tasks.
+  `deleteNote` are the store actions and they commit immediately. Tasks also carry
+  optional `dueAt`/`remindAt` (unix ms). The `persist` `version` is **3** — the
+  cumulative `migrate` backfills `notes: []` on older tasks (v1→v2); v2→v3 added
+  the optional `dueAt`/`remindAt` and needs no backfill (absent === "none").
 - **All mutations go through `store/useAppStore.ts`** actions. Components read via
   the `selectors.ts` hooks (they use `useShallow` for arrays). Add new behavior as
   a store action, not ad-hoc state in components.
@@ -116,7 +121,11 @@ src/
   (`moveMode` + an order `moveSnapshot` for Esc-revert), the Vim-keys toggle
   (`vimEnabled`) + command-line buffer (`cmdline`), and overlay/modal flags
   (`paletteOpen`, `helpOpen`, `hintsActive`, `newOpen`, `editId`, `deleteId`,
-  `archivedOpen`, `kanbanColumnsOpen`, `homeShowArchived`). Cursor moves must never
+  `archivedOpen`, `kanbanColumnsOpen`, `homeShowArchived`, `homeQuery`), plus
+  `pendingSelectId` (a task to focus AFTER the next route change — set by a Home
+  search result that targets a task on another board, consumed by the keymap's
+  route-reset effect). `editId` opens the unified `TaskDialog` (view/edit + due/
+  reminder + discussion); there is no separate `notesId` anymore. Cursor moves must never
   dirty the persisted blob. `useUiStore` is deliberately "dumb" (primitive
   setters); `useUiStore` never imports `useAppStore` (no cycle). `vimEnabled` is
   the lone exception to "non-persisted" — it mirrors to its own
@@ -137,6 +146,24 @@ src/
   out to Home from a board. **Shift+D** sets `deleteId` to open a destructive
   confirm; the board views run the exported `deleteTaskWithCursor` on confirm.
   When adding a shortcut, decide which block it belongs in.
+- **Task dialog & scheduling.** Opening a task (Enter / clicking the card / its open
+  button) shows `features/TaskDialog.tsx` — a unified view/edit modal whose fields
+  **commit live** to the store (no Save/Discard) with `features/NoteThread.tsx`
+  embedded for the discussion. Creating a task still uses the buffered
+  `TaskFormDialog`. Due date + reminder use `components/DateTimePicker.tsx`, a
+  **dependency-free** shadcn-style Popover/calendar/time picker (pure math in
+  `lib/datetime.ts`) — do NOT add react-day-picker/date-fns; the hand-rolled grid
+  keeps the single-file build a single chunk. Reminders fire through the in-tab
+  **Web Notifications API** only (`lib/notifications.ts` + `hooks/useReminderScheduler.ts`,
+  mounted in `App`): no Service Worker / Push (they need https and can't run from
+  `file://`), so reminders only fire while the tab is open but work in BOTH builds.
+  The on/off pref is its own `todokan:notifications-enabled` localStorage key (like
+  the theme/vim prefs), never the persisted blob.
+- **Home search** (`features/HomePage.tsx`) spans lists AND tasks; `parseQuery`
+  (`lib/search.ts`) reads a leading `type:task`/`type:list` filter plus the `#tag`
+  prefix. Results are navigated inline (↑/↓/Enter while the search box is focused);
+  picking a task sets `pendingSelectId` then navigates to its board so the view
+  highlights it on arrival.
 
 ## Conventions
 
@@ -168,7 +195,10 @@ src/
    is the one primitive: insert before the target card, or at the column's end when
    `beforeTaskId` is null. `onDragOver` does the live cross-column hop;
    `onDragEnd` finalizes. The board-wide `taskIds` array (filtered per column) is
-   the order — there are no per-column arrays.
+   the order — there are no per-column arrays. **Touch:** both views register a
+   `TouchSensor` with a long-press `delay` (220ms, 6px tolerance) alongside the
+   `PointerSensor` so dragging works on phones/tablets (a quick swipe still
+   scrolls). Keep both sensors statically imported (no dynamic import).
 7. **"Done" column** is identified by `column.isDone`, not its title.
 8. **The global keymap guard** (`hooks/useGlobalKeymap.ts`) ignores keys while
    focus is in an `input`/`textarea`/`select`/`contenteditable`, while any dialog
@@ -199,7 +229,10 @@ src/
   archived-drawer nav, Esc→Home and the discard guard; `keymapTable.test.ts`
   covers the mode-aware Help table (`visibleBindings`); `notes.test.ts` covers the
   note thread actions + import re-keying; `linkify.test.ts` covers the URL
-  tokenizer; `hints.test.ts` + `uiStore.test.ts` cover the pure/ephemeral pieces.
+  tokenizer; `datetime.test.ts` covers the pure date-picker math; `hints.test.ts`
+  + `uiStore.test.ts` cover the pure/ephemeral pieces. `store.test.ts` also covers
+  `type:` query parsing and `dueAt`/`remindAt` edits; `render.test.tsx` covers the
+  unified TaskDialog live-edit and the Home `type:task` jump-to-task flow.
 - After UI/logic changes, run `pnpm typecheck && pnpm lint && pnpm test`, then
   `pnpm build` and `pnpm build:single`. Note `tsc -b` type-checks the test files
   too — a green `vitest` run is not enough on its own. That is the full automated
@@ -214,5 +247,8 @@ src/
 
 - Don't introduce CSS Modules or another styling system.
 - Don't add dynamic imports / route-level code splitting (breaks `build:single`).
+- Don't add a Service Worker / Push, or heavy date libs (react-day-picker/date-fns).
+  Reminders are intentionally in-tab (Web Notifications API) and the date-time
+  picker is hand-rolled so the `file://` single-file build stays one chunk.
 - Don't commit `dist/`, `dist-single/`, or `node_modules/` (already git-ignored).
 - Don't run builds/commits unless asked.

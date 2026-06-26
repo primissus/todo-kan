@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '@/App';
 import { TodoView } from '@/features/todo/TodoView';
 import { KanbanView } from '@/features/kanban/KanbanView';
 import { useAppStore } from '@/store/useAppStore';
+import { useUiStore } from '@/store/useUiStore';
 
 beforeEach(() => {
   useAppStore.setState({ boards: {}, boardOrder: [], tasks: {} });
@@ -128,6 +129,47 @@ describe('TodoView', () => {
     await user.click(screen.getByRole('button', { name: 'Discard' }));
     expect(screen.getByLabelText('Edit note')).toHaveValue('note B');
     expect(useAppStore.getState().tasks[t].notes[0].text).toBe('note A');
+  });
+});
+
+describe('TaskDialog (unified view/edit + discussion)', () => {
+  it('opens from the row and live-edits the title', async () => {
+    const user = userEvent.setup();
+    const id = useAppStore.getState().createBoard('todo');
+    const t = useAppStore.getState().addTask(id, { title: 'Original' });
+    render(<TodoView boardId={id} />);
+
+    await user.click(screen.getByRole('button', { name: 'Open task' }));
+
+    // The unified dialog shows the scheduling fields and the discussion thread.
+    expect(await screen.findByText('Due date')).toBeInTheDocument();
+    expect(screen.getByText('Discussion')).toBeInTheDocument();
+
+    const titleInput = screen.getByLabelText('Title');
+    await user.clear(titleInput);
+    await user.type(titleInput, 'Renamed');
+    expect(useAppStore.getState().tasks[t].title).toBe('Renamed');
+  });
+});
+
+describe('Home search', () => {
+  it('type:task jumps to the matching task on its board', async () => {
+    const user = userEvent.setup();
+    const id = useAppStore.getState().createBoard('todo', 'Groceries');
+    const t = useAppStore.getState().addTask(id, { title: 'Buy milk' });
+    window.location.hash = '';
+    render(<App />);
+
+    const search = await screen.findByLabelText('Search');
+    await user.type(search, 'type:task milk');
+
+    const hit = await screen.findByRole('button', { name: /Buy milk/i });
+    await user.click(hit);
+
+    await waitFor(() => {
+      expect(window.location.hash).toContain(encodeURIComponent(id));
+      expect(useUiStore.getState().selectedId).toBe(t);
+    });
   });
 });
 

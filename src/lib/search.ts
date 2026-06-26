@@ -12,14 +12,25 @@ export interface ParsedQuery {
   term: string;
   /** A leading `#` switches to tag-only matching (req 4). */
   tagOnly: boolean;
+  /** A leading `type:task` / `type:list` scopes Home search to one kind. */
+  kind?: 'task' | 'list';
 }
 
 export function parseQuery(raw: string): ParsedQuery {
-  const trimmed = raw.trim();
-  if (trimmed.startsWith('#')) {
-    return { term: trimmed.slice(1).trim(), tagOnly: true };
+  let rest = raw.trim();
+
+  // `type:task` / `type:list` prefix (parsed before `#` so "type:task #x" works).
+  let kind: 'task' | 'list' | undefined;
+  const typeMatch = /^type:(task|list)\b\s*/i.exec(rest);
+  if (typeMatch) {
+    kind = typeMatch[1].toLowerCase() as 'task' | 'list';
+    rest = rest.slice(typeMatch[0].length);
   }
-  return { term: trimmed, tagOnly: false };
+
+  if (rest.startsWith('#')) {
+    return { term: rest.slice(1).trim(), tagOnly: true, kind };
+  }
+  return { term: rest, tagOnly: false, kind };
 }
 
 const FULL_KEYS: IFuseOptions<Searchable>['keys'] = [

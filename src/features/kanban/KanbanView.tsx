@@ -8,17 +8,32 @@ import {
   type DragStartEvent,
   KeyboardSensor,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
-import { Archive, CheckCheck, Eraser, Plus, Settings2 } from 'lucide-react';
+import {
+  Archive,
+  CheckCheck,
+  Eraser,
+  MoreVertical,
+  Plus,
+  Settings2,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { BoardHeader } from '@/features/BoardHeader';
 import { Column } from '@/features/kanban/Column';
 import { KanbanCard } from '@/features/kanban/KanbanCard';
 import { TaskFormDialog } from '@/features/TaskFormDialog';
-import { NotesDialog } from '@/features/NotesDialog';
+import { TaskDialog } from '@/features/TaskDialog';
 import { ArchivedTasksDrawer } from '@/features/ArchivedTasksDrawer';
 import { ColumnsSettings } from '@/features/kanban/ColumnsSettings';
 import { TypeToConfirmModal } from '@/components/TypeToConfirmModal';
@@ -49,7 +64,6 @@ export function KanbanView({ boardId }: KanbanViewProps) {
   const allTags = useAllTags();
 
   const addTask = useAppStore((s) => s.addTask);
-  const editTask = useAppStore((s) => s.editTask);
   const archiveDone = useAppStore((s) => s.archiveDone);
   const clearBoard = useAppStore((s) => s.clearBoard);
 
@@ -58,8 +72,6 @@ export function KanbanView({ boardId }: KanbanViewProps) {
   const setNewOpen = useUiStore((s) => s.setNewOpen);
   const editId = useUiStore((s) => s.editId);
   const setEditId = useUiStore((s) => s.setEditId);
-  const notesId = useUiStore((s) => s.notesId);
-  const setNotesId = useUiStore((s) => s.setNotesId);
   const deleteId = useUiStore((s) => s.deleteId);
   const setDeleteId = useUiStore((s) => s.setDeleteId);
   const archivedOpen = useUiStore((s) => s.archivedOpen);
@@ -72,7 +84,13 @@ export function KanbanView({ boardId }: KanbanViewProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const sensors = useSensors(
+    // Mouse: a 5px drag threshold (snappy). Touch: a 220ms long-press (with a 6px
+    // wiggle tolerance) so a quick swipe still scrolls the board but a hold picks
+    // up the card — this is what makes drag work on phones/tablets.
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 220, tolerance: 6 },
+    }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
@@ -81,7 +99,6 @@ export function KanbanView({ boardId }: KanbanViewProps) {
   const active = tasks.filter((t) => !t.archived);
   const archivedCount = tasks.length - active.length;
   const editTaskObj = editId ? tasks.find((t) => t.id === editId) : undefined;
-  const notesTaskObj = notesId ? tasks.find((t) => t.id === notesId) : undefined;
   const deleteTaskObj = deleteId
     ? tasks.find((t) => t.id === deleteId)
     : undefined;
@@ -145,7 +162,7 @@ export function KanbanView({ boardId }: KanbanViewProps) {
      */
     <div className="flex flex-col tall:md:h-full tall:md:min-h-0">
       <div className="mx-auto w-full max-w-6xl shrink-0 px-4 pt-6">
-      <BoardHeader board={board}>
+      <BoardHeader board={board} wide>
         <Button
           size="sm"
           onClick={() => {
@@ -159,36 +176,40 @@ export function KanbanView({ boardId }: KanbanViewProps) {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => setColumnsOpen(true)}
-        >
-          <Settings2 className="size-4" />
-          Columns
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
           onClick={() => archiveDone(boardId)}
         >
           <CheckCheck className="size-4" />
           Archive done
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setArchivedOpen(true)}
-        >
-          <Archive className="size-4" />
-          Archived{archivedCount > 0 ? ` (${archivedCount})` : ''}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground"
-          onClick={() => setClearOpen(true)}
-        >
-          <Eraser className="size-4" />
-          Clear
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              aria-label="More board actions"
+            >
+              <MoreVertical className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setColumnsOpen(true)}>
+              <Settings2 className="size-4" />
+              Columns
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setArchivedOpen(true)}>
+              <Archive className="size-4" />
+              Archived{archivedCount > 0 ? ` (${archivedCount})` : ''}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => setClearOpen(true)}
+            >
+              <Eraser className="size-4" />
+              Clear
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         </BoardHeader>
       </div>
 
@@ -253,44 +274,17 @@ export function KanbanView({ boardId }: KanbanViewProps) {
             description: v.description,
             tags: v.tags,
             columnId: v.columnId,
+            dueAt: v.dueAt ?? undefined,
           })
         }
       />
 
-      <TaskFormDialog
+      <TaskDialog
+        taskId={editId}
         open={!!editTaskObj}
         onOpenChange={(o) => !o && setEditId(null)}
-        mode="edit"
-        heading="Edit card"
         columns={board.columns}
-        initial={
-          editTaskObj
-            ? {
-                title: editTaskObj.title,
-                description: editTaskObj.description,
-                tags: editTaskObj.tags,
-                columnId: editTaskObj.columnId,
-              }
-            : undefined
-        }
         allTags={allTags}
-        onSubmit={(v) => {
-          if (editId) {
-            editTask(editId, {
-              title: v.title,
-              description: v.description,
-              tags: v.tags,
-              columnId: v.columnId,
-            });
-          }
-          setEditId(null);
-        }}
-      />
-
-      <NotesDialog
-        taskId={notesId}
-        open={!!notesTaskObj}
-        onOpenChange={(o) => !o && setNotesId(null)}
       />
 
       <ColumnsSettings

@@ -17,6 +17,11 @@ export function useBoard(boardId: string): Board | undefined {
   return useAppStore((s) => s.boards[boardId]);
 }
 
+/** Every task across all boards (caller filters archived). Used by Home search. */
+export function useAllTasks(): Task[] {
+  return useAppStore(useShallow((s) => Object.values(s.tasks)));
+}
+
 /** A board's tasks in order (includes archived/completed; caller filters). */
 export function useBoardTasks(boardId: string): Task[] {
   return useAppStore(
