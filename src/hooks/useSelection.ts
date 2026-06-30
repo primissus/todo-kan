@@ -17,3 +17,18 @@ export function useIsSelected(id: string): boolean {
 export function useIsMoveTarget(id: string): boolean {
   return useUiStore((s) => s.moveMode && s.selectedId === id);
 }
+
+/** Whether bulk selection mode is active (cards/rows show a select checkbox). */
+export function useSelectionMode(): boolean {
+  return useUiStore((s) => s.selectionMode);
+}
+
+/** True when this task is in the bulk selection set (primitive → granular). */
+export function useIsTaskSelected(id: string): boolean {
+  return useUiStore((s) => s.selectedTaskIds.includes(id));
+}
+
+/** True when this item's per-item actions menu (⋮) is the open one (granular). */
+export function useIsActionsMenuOpen(id: string): boolean {
+  return useUiStore((s) => s.actionsMenuId === id);
+}

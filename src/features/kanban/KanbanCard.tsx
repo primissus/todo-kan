@@ -1,13 +1,22 @@
 import { useEffect, useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Archive, Bell, CalendarClock, Eye, MessageSquare } from 'lucide-react';
+import { Archive, Bell, CalendarClock, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Markdown } from '@/components/Markdown';
+import { TaskActionsMenu } from '@/features/taskActions/TaskActionsMenu';
 import { cn } from '@/lib/utils';
 import { formatDateTime } from '@/lib/datetime';
 import { useAppStore } from '@/store/useAppStore';
-import { useIsMoveTarget, useIsSelected } from '@/hooks/useSelection';
+import { useUiStore } from '@/store/useUiStore';
+import {
+  useIsActionsMenuOpen,
+  useIsMoveTarget,
+  useIsSelected,
+  useIsTaskSelected,
+  useSelectionMode,
+} from '@/hooks/useSelection';
 import type { Task } from '@/lib/types/domain';
 
 export interface KanbanCardProps {
@@ -18,6 +27,9 @@ export interface KanbanCardProps {
 }
 
 export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
+  const selectionMode = useSelectionMode();
+  const taskSelected = useIsTaskSelected(task.id);
+  const toggleTaskSelected = useUiStore((s) => s.toggleTaskSelected);
   const {
     attributes,
     listeners,
@@ -28,10 +40,13 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
   } = useSortable({
     id: task.id,
     data: { type: 'card', columnId: task.columnId },
+    // In selection mode the whole card is a select target — no dragging.
+    disabled: selectionMode,
   });
   const archiveTask = useAppStore((s) => s.archiveTask);
   const selected = useIsSelected(task.id);
   const moveTarget = useIsMoveTarget(task.id);
+  const menuOpen = useIsActionsMenuOpen(task.id);
   const noteCount = task.notes?.length ?? 0;
 
   const nodeRef = useRef<HTMLDivElement | null>(null);
@@ -57,21 +72,38 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
       style={style}
       className={cn(
         'group/card scroll-mt-20 rounded-md border bg-card p-2.5 text-card-foreground shadow-xs',
-        !overlay && 'cursor-grab active:cursor-grabbing',
+        !overlay && !selectionMode && 'cursor-grab active:cursor-grabbing',
+        !overlay && selectionMode && 'cursor-pointer select-none',
         isDragging && 'opacity-40',
         overlay && 'rotate-1 cursor-grabbing shadow-lg',
         selected &&
           'ring-2 ring-ring ring-offset-2 ring-offset-background',
         moveTarget &&
           'ring-2 ring-primary ring-offset-2 ring-offset-background shadow-lg',
+        taskSelected && 'bg-accent/40',
       )}
-      {...(overlay ? {} : attributes)}
-      {...(overlay ? {} : listeners)}
+      {...(overlay || selectionMode ? {} : attributes)}
+      {...(overlay || selectionMode ? {} : listeners)}
+      {...(!overlay && selectionMode
+        ? {
+            onClick: () => toggleTaskSelected(task.id),
+            role: 'button',
+            'aria-pressed': taskSelected,
+          }
+        : {})}
     >
       <div className="flex items-start gap-2">
-        {overlay ? (
+        {!overlay && selectionMode && (
+          // Display-only — the whole card is the click target in selection mode.
+          <Checkbox
+            checked={taskSelected}
+            className="pointer-events-none mt-0.5"
+            aria-hidden
+          />
+        )}
+        {overlay || selectionMode ? (
           <p className="min-w-0 flex-1 text-sm font-medium break-words">
-            {task.title}
+            {task.title || (overlay ? '' : 'Untitled task')}
           </p>
         ) : (
           <button
@@ -82,13 +114,14 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
             {task.title || 'Untitled task'}
           </button>
         )}
-        {!overlay && (
+        {!overlay && !selectionMode && (
           <div
             className={cn(
               'flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover/card:opacity-100',
-              // Selected via the keyboard cursor → reveal the actions (it has no
-              // hover), matching how a focused row exposes them in the TODO list.
-              selected && 'opacity-100',
+              // Selected via the keyboard cursor / an open actions menu → reveal
+              // the actions (the cursor has no hover, and a keyboard-opened menu
+              // needs its trigger visible to anchor), matching the TODO row.
+              (selected || menuOpen) && 'opacity-100',
             )}
           >
             {noteCount === 0 && (
@@ -107,28 +140,30 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
               variant="ghost"
               size="icon"
               className="size-7"
-              aria-label="Open card"
-              {...stopDrag}
-              onClick={onEdit}
-            >
-              <Eye className="size-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7"
               aria-label="Archive card"
               {...stopDrag}
               onClick={() => archiveTask(task.id)}
             >
               <Archive className="size-3.5" />
             </Button>
+            <TaskActionsMenu
+              taskId={task.id}
+              onView={() => onEdit?.()}
+              iconClassName="size-3.5"
+              onTriggerPointerDown={stopDrag.onPointerDown}
+            />
           </div>
         )}
       </div>
 
       {task.description ? (
-        <div className="mt-1 text-xs break-words text-muted-foreground">
+        <div
+          className={cn(
+            'mt-1 text-xs break-words text-muted-foreground',
+            // Keep links/code inert so a click selects the card.
+            selectionMode && 'pointer-events-none',
+          )}
+        >
           <Markdown text={task.description} />
         </div>
       ) : null}
@@ -172,16 +207,23 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
 
       {noteCount > 0 && (
         <div className="mt-2">
-          <button
-            type="button"
-            aria-label={`Notes (${noteCount})`}
-            className="inline-flex items-center gap-1 rounded text-xs text-muted-foreground hover:text-foreground"
-            {...(overlay ? {} : stopDrag)}
-            onClick={overlay ? undefined : onEdit}
-          >
-            <MessageSquare className="size-3.5" />
-            <span className="tabular-nums">{noteCount}</span>
-          </button>
+          {overlay || selectionMode ? (
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <MessageSquare className="size-3.5" />
+              <span className="tabular-nums">{noteCount}</span>
+            </span>
+          ) : (
+            <button
+              type="button"
+              aria-label={`Notes (${noteCount})`}
+              className="inline-flex items-center gap-1 rounded text-xs text-muted-foreground hover:text-foreground"
+              {...stopDrag}
+              onClick={onEdit}
+            >
+              <MessageSquare className="size-3.5" />
+              <span className="tabular-nums">{noteCount}</span>
+            </button>
+          )}
         </div>
       )}
     </div>

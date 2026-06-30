@@ -5,7 +5,7 @@ import { immer } from 'zustand/middleware/immer';
 import { storage } from '@/lib/storage';
 import { STORAGE_KEYS } from '@/lib/storageKeys';
 import { newBoardId, newColumnId, newNoteId, newTaskId } from '@/lib/id';
-import { rekey, type TransferPayload } from '@/lib/transfer';
+import { buildExport, rekey, type TransferPayload } from '@/lib/transfer';
 import {
   DEFAULT_COLUMN_TITLES,
   type Board,
@@ -70,6 +70,19 @@ interface Actions {
   toggleComplete: (taskId: string) => void;
   archiveTask: (taskId: string) => void;
   unarchiveTask: (taskId: string) => void;
+  /** Duplicate a task in place (fresh ids incl. its notes), inserted right after
+   *  the source in its board — same column/status. Returns the new task id. */
+  cloneTask: (taskId: string) => TaskId;
+  // bulk task ops (selection mode)
+  archiveTasks: (taskIds: string[]) => void;
+  deleteTasks: (taskIds: string[]) => void;
+  /** Re-parent tasks onto another board. Kanban target → chosen/first column;
+   *  TODO target → columnId cleared. Tasks already on the target are skipped. */
+  moveTasksToBoard: (
+    taskIds: string[],
+    targetBoardId: string,
+    columnId?: ColumnId | null,
+  ) => void;
   // notes (a per-task thread)
   addNote: (taskId: string, text: string) => void;
   editNote: (taskId: string, noteId: string, text: string) => void;
@@ -85,6 +98,13 @@ interface Actions {
     columnId: ColumnId,
     beforeTaskId: string | null,
   ) => void;
+  // board-level transforms
+  /** Deep-copy a board + all its tasks (fresh ids), inserted after the source. */
+  cloneBoard: (boardId: string, title?: string) => BoardId;
+  /** Move every task of `sourceId` into `targetId`, then delete the source. */
+  mergeBoardInto: (sourceId: string, targetId: string) => void;
+  /** Flip a board between 'todo' and 'kanban', remapping each task. */
+  convertBoard: (boardId: string) => void;
   // bulk
   clearBoard: (boardId: string) => void;
   clearAll: () => void;
@@ -112,9 +132,52 @@ function makeColumns(): Column[] {
   }));
 }
 
+// "Done" is represented two different ways: the TODO `completed` flag, and the
+// Kanban `isDone` column. Re-homing a task across board types must translate
+// between the two so a finished task never silently becomes active (and vice
+// versa). These helpers keep `moveTasksToBoard` / `mergeBoardInto` consistent
+// with `convertBoard`.
+
+/** Is this task "done" in its CURRENT board's representation? */
+function taskWasDone(src: Board | undefined, tk: Task): boolean {
+  if (!src) return tk.completed;
+  if (src.type === 'kanban') {
+    return !!src.columns.find((c) => c.id === tk.columnId)?.isDone;
+  }
+  return tk.completed;
+}
+
+/** The column a "done" card belongs in on a Kanban board (isDone, else last). */
+function doneColumnId(b: Board): ColumnId | null {
+  return (
+    (b.columns.find((c) => c.isDone) ?? b.columns[b.columns.length - 1])?.id ??
+    null
+  );
+}
+
+/**
+ * Where a task lands on a Kanban `target` when no explicit column is chosen
+ * ("keep status"): a same-titled column when the source is also Kanban (so the
+ * exact status is preserved), otherwise the Done column for a done task and the
+ * first column for everything else.
+ */
+function landingColumnId(
+  src: Board | undefined,
+  target: Board,
+  tk: Task,
+): ColumnId | null {
+  const firstCol = target.columns[0]?.id ?? null;
+  if (src && src.type === 'kanban' && tk.columnId) {
+    const srcCol = src.columns.find((c) => c.id === tk.columnId);
+    const match = srcCol && target.columns.find((c) => c.title === srcCol.title);
+    if (match) return match.id;
+  }
+  return taskWasDone(src, tk) ? doneColumnId(target) : firstCol;
+}
+
 export const useAppStore = create<AppState>()(
   persist(
-    immer<AppState>((set) => ({
+    immer<AppState>((set, get) => ({
       boards: {},
       boardOrder: [],
       tasks: {},
@@ -321,6 +384,113 @@ export const useAppStore = create<AppState>()(
           }
         }),
 
+      cloneTask: (taskId) => {
+        const id = newTaskId();
+        set((s) => {
+          const src = s.tasks[taskId];
+          if (!src) return;
+          const b = s.boards[src.boardId];
+          if (!b) return;
+          const t = now();
+          s.tasks[id] = {
+            id,
+            boardId: src.boardId,
+            title: src.title,
+            description: src.description,
+            tags: [...src.tags],
+            completed: src.completed,
+            columnId: src.columnId,
+            archived: false,
+            notes: (src.notes ?? []).map((n) => ({
+              id: newNoteId(),
+              text: n.text,
+              createdAt: n.createdAt,
+              updatedAt: n.updatedAt,
+            })),
+            dueAt: src.dueAt,
+            // Only carry a reminder that's still pending. A past remindAt would
+            // re-fire on the clone: the scheduler dedups per task id, so the
+            // fresh id defeats the source's "already fired" mark and a stale
+            // notification would pop on the next tick (useReminderScheduler).
+            remindAt: src.remindAt != null && src.remindAt > t ? src.remindAt : undefined,
+            createdAt: t,
+            updatedAt: t,
+          };
+          // Drop the copy right after the original in board order.
+          const idx = b.taskIds.indexOf(taskId as TaskId);
+          if (idx >= 0) b.taskIds.splice(idx + 1, 0, id);
+          else b.taskIds.push(id);
+          b.updatedAt = t;
+        });
+        return id;
+      },
+
+      archiveTasks: (taskIds) =>
+        set((s) => {
+          const t = now();
+          for (const id of taskIds) {
+            const tk = s.tasks[id];
+            if (tk && !tk.archived) {
+              tk.archived = true;
+              tk.updatedAt = t;
+            }
+          }
+        }),
+
+      deleteTasks: (taskIds) =>
+        set((s) => {
+          for (const id of taskIds) {
+            const tk = s.tasks[id];
+            if (!tk) continue;
+            const b = s.boards[tk.boardId];
+            if (b) b.taskIds = b.taskIds.filter((x) => x !== id);
+            delete s.tasks[id];
+          }
+        }),
+
+      moveTasksToBoard: (taskIds, targetBoardId, columnId) =>
+        set((s) => {
+          const target = s.boards[targetBoardId];
+          if (!target) return;
+          const t = now();
+          // An explicit, valid column wins (the Move dialog's picker). Otherwise
+          // the task keeps its status: a same-titled column / Done / first.
+          const explicitCol: ColumnId | null =
+            target.type === 'kanban' &&
+            columnId &&
+            target.columns.some((c) => c.id === columnId)
+              ? columnId
+              : null;
+          const touchedSources = new Set<string>();
+          for (const id of taskIds) {
+            const tk = s.tasks[id];
+            if (!tk || tk.boardId === targetBoardId) continue;
+            const src = s.boards[tk.boardId];
+            const wasDone = taskWasDone(src, tk);
+            if (src) {
+              src.taskIds = src.taskIds.filter((x) => x !== id);
+              touchedSources.add(src.id);
+            }
+            tk.boardId = targetBoardId as BoardId;
+            if (target.type === 'kanban') {
+              tk.columnId = explicitCol ?? landingColumnId(src, target, tk);
+              tk.completed = false; // kanban tracks done via the column
+            } else {
+              tk.columnId = null;
+              tk.completed = wasDone; // carry the done state onto the TODO list
+            }
+            tk.updatedAt = t;
+            if (!target.taskIds.includes(id as TaskId)) {
+              target.taskIds.push(id as TaskId);
+            }
+          }
+          for (const sid of touchedSources) {
+            const src = s.boards[sid];
+            if (src) src.updatedAt = t;
+          }
+          target.updatedAt = t;
+        }),
+
       addNote: (taskId, text) =>
         set((s) => {
           const tk = s.tasks[taskId];
@@ -386,6 +556,101 @@ export const useAppStore = create<AppState>()(
           ids.splice(insertAt, 0, taskId as TaskId);
           b.taskIds = ids;
           b.updatedAt = now();
+        }),
+
+      cloneBoard: (boardId, title) => {
+        const state = get();
+        const src = state.boards[boardId];
+        if (!src) return boardId as BoardId;
+        // Reuse the export→rekey path so the copy gets fresh, collision-proof ids
+        // for the board, its columns AND every task (incl. archived).
+        const { boards, tasks } = rekey(
+          buildExport([boardId], state.boards, state.tasks),
+        );
+        const clone = boards[0];
+        if (!clone) return boardId as BoardId;
+        const t = now();
+        clone.title =
+          title?.trim() || `Copy of ${src.title || 'Untitled'}`;
+        clone.archived = false;
+        clone.createdAt = t;
+        clone.updatedAt = t;
+        set((s) => {
+          for (const tk of tasks) s.tasks[tk.id] = tk;
+          s.boards[clone.id] = clone;
+          const idx = s.boardOrder.indexOf(boardId);
+          if (idx >= 0) s.boardOrder.splice(idx + 1, 0, clone.id);
+          else s.boardOrder.unshift(clone.id);
+        });
+        return clone.id;
+      },
+
+      mergeBoardInto: (sourceId, targetId) =>
+        set((s) => {
+          const src = s.boards[sourceId];
+          const target = s.boards[targetId];
+          if (!src || !target || sourceId === targetId) return;
+          const t = now();
+          for (const id of src.taskIds) {
+            const tk = s.tasks[id];
+            if (!tk) continue;
+            if (target.type === 'kanban') {
+              tk.columnId = landingColumnId(src, target, tk);
+              tk.completed = false;
+            } else {
+              // Read done-status BEFORE clearing columnId (taskWasDone reads it).
+              const wasDone = taskWasDone(src, tk);
+              tk.columnId = null;
+              tk.completed = wasDone;
+            }
+            tk.boardId = targetId as BoardId;
+            tk.updatedAt = t;
+            target.taskIds.push(id as TaskId);
+          }
+          target.updatedAt = t;
+          delete s.boards[sourceId];
+          s.boardOrder = s.boardOrder.filter((x) => x !== sourceId);
+        }),
+
+      convertBoard: (boardId) =>
+        set((s) => {
+          const b = s.boards[boardId];
+          if (!b) return;
+          const t = now();
+          if (b.type === 'todo') {
+            // → kanban: give it default columns; completed cards land in Done,
+            // the rest in the first column. Clear `completed` since kanban tracks
+            // done via the column (avoids a stale flag if it converts back).
+            b.type = 'kanban';
+            b.columns = makeColumns();
+            const first = b.columns[0]?.id ?? null;
+            const done =
+              (b.columns.find((c) => c.isDone) ?? b.columns[b.columns.length - 1])
+                ?.id ?? first;
+            for (const id of b.taskIds) {
+              const tk = s.tasks[id];
+              if (!tk) continue;
+              tk.columnId = tk.completed ? done : first;
+              tk.completed = false;
+              tk.updatedAt = t;
+            }
+          } else {
+            // → todo: derive `completed` from Done-column membership (so a stale
+            // flag on a non-Done card is cleared too); clear columns.
+            const doneIds = new Set(
+              b.columns.filter((c) => c.isDone).map((c) => c.id),
+            );
+            for (const id of b.taskIds) {
+              const tk = s.tasks[id];
+              if (!tk) continue;
+              tk.completed = !!(tk.columnId && doneIds.has(tk.columnId));
+              tk.columnId = null;
+              tk.updatedAt = t;
+            }
+            b.type = 'todo';
+            b.columns = [];
+          }
+          b.updatedAt = t;
         }),
 
       clearBoard: (boardId) =>

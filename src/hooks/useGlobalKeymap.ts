@@ -19,6 +19,11 @@ import { goBoard, goHome, useRoute, type Route } from '@/lib/router';
 import { filterBySearch } from '@/lib/search';
 import { useAppStore } from '@/store/useAppStore';
 import { useUiStore, type UiState } from '@/store/useUiStore';
+import {
+  archiveSelection,
+  requestDeleteSelection,
+  requestMove,
+} from '@/features/selection/bulkActions';
 import type { Board, ColumnId, Task } from '@/lib/types/domain';
 
 type Dir = 'up' | 'down' | 'left' | 'right';
@@ -188,12 +193,50 @@ function selectKanban(
   }
 }
 
+/** Columns in the Home lists grid (mirrors `sm:grid-cols-2 lg:grid-cols-3`). */
+function homeGridColumns(): number {
+  if (typeof window === 'undefined' || !window.matchMedia) return 1;
+  if (window.matchMedia('(min-width: 1024px)').matches) return 3;
+  if (window.matchMedia('(min-width: 640px)').matches) return 2;
+  return 1;
+}
+
+/** Grid-aware cursor over a flat, row-major list: ↑/↓ step a full row, ←/→ one
+ *  column. With 1 column it degenerates to a plain linear list (mobile). */
+function selectGrid(
+  list: string[],
+  sel: string | null,
+  dir: Dir,
+  columns: number,
+  ui: UiState,
+): void {
+  if (list.length === 0) return;
+  const i = sel ? list.indexOf(sel) : -1;
+  if (i < 0) {
+    ui.setSelected(list[0]);
+    return;
+  }
+  const delta =
+    dir === 'down'
+      ? columns
+      : dir === 'up'
+        ? -columns
+        : dir === 'right'
+          ? 1
+          : -1;
+  const ni = i + delta;
+  if (ni >= 0 && ni < list.length) ui.setSelected(list[ni]);
+}
+
 function moveCursor(ctx: Ctx, route: Route, dir: Dir): void {
   const app = useAppStore.getState();
   const ui = useUiStore.getState();
   const sel = ui.selectedId;
   if (ctx === 'home') {
-    selectLinear(activeBoardIds(), sel, dir, ui);
+    // While Home shows the search-results listbox (a query is set), the board
+    // grid is unmounted — don't drive an invisible cursor over it.
+    if (ui.homeQuery.trim().length > 0) return;
+    selectGrid(activeBoardIds(), sel, dir, homeGridColumns(), ui);
     return;
   }
   if (route.name !== 'board') return;
@@ -394,6 +437,16 @@ function shouldHandle(e: KeyboardEvent, ui: UiState): boolean {
   if (document.querySelector('[data-slot="dialog-content"][data-state="open"]')) {
     return false;
   }
+  // An open per-item actions menu (the ⋮ dropdown) owns the keyboard too: Radix
+  // handles its own arrow/Enter/Esc navigation, so the global cursor must yield
+  // while it's open (it portals outside #root, so focus checks alone miss it).
+  if (
+    document.querySelector(
+      '[data-slot="dropdown-menu-content"][data-state="open"]',
+    )
+  ) {
+    return false;
+  }
   // Only ⌘/Ctrl+K is a registered combo; leave every other modified key alone.
   if (e.metaKey || e.ctrlKey || e.altKey) {
     return !e.altKey && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k';
@@ -467,9 +520,25 @@ function handleKey(e: KeyboardEvent, route: Route): void {
     ui.setHelpOpen(true);
     return;
   }
+  // `.` opens the cursored item's actions menu (the ⋮ dropdown) — the non-Vim way
+  // to reach Move / Clone / View / Delete on a card or row, and the board card's
+  // menu on Home. Available in both modes; a column header has no menu.
+  if (key === '.') {
+    if (ui.selectionMode || !ui.selectedId) return;
+    if (isKanbanHeader(route, ui.selectedId)) return;
+    // On Home with a search query the board grid is unmounted — nothing to anchor.
+    if (ctx === 'home' && ui.homeQuery.trim().length > 0) return;
+    e.preventDefault();
+    ui.setActionsMenuId(ui.selectedId);
+    return;
+  }
   if (key === 'Escape') {
-    // Escalating back-out: clear the cursor first, then leave the board for Home.
-    if (ui.selectedId) {
+    // Escalating back-out: leave bulk-selection mode first, then clear the
+    // cursor, then leave the board for Home.
+    if (ui.selectionMode) {
+      e.preventDefault();
+      ui.exitSelectionMode();
+    } else if (ui.selectedId) {
       e.preventDefault();
       ui.setSelected(null);
     } else if (route.name === 'board') {
@@ -478,10 +547,28 @@ function handleKey(e: KeyboardEvent, route: Route): void {
     }
     return;
   }
+  // In selection mode the cursor still moves (arrows / jkl), and Enter / Space
+  // toggle the cursored task's selection — so selecting is fully keyboard-driven
+  // even without Vim keys.
+  if (
+    ui.selectionMode &&
+    ctx !== 'home' &&
+    (key === 'Enter' || key === ' ' || key === 'Spacebar') &&
+    ui.selectedId
+  ) {
+    e.preventDefault();
+    if (!isKanbanHeader(route, ui.selectedId)) {
+      ui.toggleTaskSelected(ui.selectedId);
+    }
+    return;
+  }
   // Enter opens the selected item; arrow keys move the cursor — the "simple"
   // shortcuts that work without Vim.
   if (key === 'Enter') {
     if (!ui.selectedId) return;
+    // While Home shows search results, the cursored board grid is hidden — don't
+    // jump to an off-screen board (the visible results own Enter via the box).
+    if (ctx === 'home' && ui.homeQuery.trim().length > 0) return;
     e.preventDefault();
     if (ctx === 'home') goBoard(ui.selectedId);
     // A column header has no card to open — Enter adds a card to that column.
@@ -537,26 +624,77 @@ function handleKey(e: KeyboardEvent, route: Route): void {
     return;
   }
   if (lower === 'd' && e.shiftKey) {
-    // Tasks only (Home board cards own their own confirmed delete; a column header
-    // is not deletable here). Opens a confirm dialog — the board view runs
-    // deleteTaskWithCursor on confirm.
+    // In selection mode: delete the whole selection (confirm). Otherwise a single
+    // cursored task (Home board cards own their own confirmed delete; a column
+    // header isn't deletable). Both open a confirm the board view runs on confirm.
+    if (ui.selectionMode) {
+      if (ui.selectedTaskIds.length) {
+        e.preventDefault();
+        requestDeleteSelection();
+      }
+      return;
+    }
     if (ctx === 'home' || !ui.selectedId || isKanbanHeader(route, ui.selectedId))
       return;
     e.preventDefault();
     ui.setDeleteId(ui.selectedId);
     return;
   }
+  if (lower === 'm' && e.shiftKey) {
+    // In selection mode: move the whole selection (and never fall back to the
+    // cursored task — matching `a`/Shift+D and the disabled toolbar button).
+    // Otherwise: move the single cursored task. Opens the lifted MoveToListDialog.
+    if (ui.selectionMode) {
+      if (ui.selectedTaskIds.length) {
+        e.preventDefault();
+        requestMove(ui.selectedTaskIds);
+      }
+      return;
+    }
+    if (ctx === 'home' || !ui.selectedId || isKanbanHeader(route, ui.selectedId))
+      return;
+    e.preventDefault();
+    requestMove([ui.selectedId]);
+    return;
+  }
   // No other shift combo is bound — don't hijack the browser's.
   if (e.shiftKey) return;
 
+  // Bulk-selection mode toggle + per-item toggle (board views only).
+  if (lower === 's') {
+    if (ctx === 'home') return;
+    e.preventDefault();
+    if (ui.selectionMode) ui.exitSelectionMode();
+    else ui.enterSelectionMode();
+    return;
+  }
+  if (lower === 'x') {
+    if (ctx === 'home' || !ui.selectedId || isKanbanHeader(route, ui.selectedId))
+      return;
+    e.preventDefault();
+    if (!ui.selectionMode) ui.enterSelectionMode();
+    ui.toggleTaskSelected(ui.selectedId);
+    return;
+  }
+
   // Selection-scoped actions (a column header isn't archivable/movable).
   if (lower === 'a') {
+    // In selection mode, `a` archives the whole selection.
+    if (ui.selectionMode) {
+      if (ui.selectedTaskIds.length) {
+        e.preventDefault();
+        archiveSelection();
+      }
+      return;
+    }
     if (!ui.selectedId || isKanbanHeader(route, ui.selectedId)) return;
     e.preventDefault();
     archiveSelected(ctx, route, ui.selectedId);
     return;
   }
   if (lower === 'm') {
+    // Move-mode (relocate within a board) is disabled while selecting.
+    if (ui.selectionMode) return;
     if (!ui.selectedId || isKanbanHeader(route, ui.selectedId)) return;
     e.preventDefault();
     beginMove(ctx, route, ui.selectedId);

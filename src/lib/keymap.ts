@@ -22,26 +22,34 @@ export interface KeyBinding {
 export const KEY_CATEGORIES = [
   'Navigation',
   'Actions',
+  'Selection',
   'Move mode',
   'Global',
 ] as const;
 
 export const KEYMAP: KeyBinding[] = [
   // Navigation — arrow keys always work; j/k/h/l are the Vim aliases.
-  { keys: ['↓'], vimKeys: ['j'], label: 'Move cursor down (next card / row / list)', category: 'Navigation' },
-  { keys: ['↑'], vimKeys: ['k'], label: 'Move cursor up (previous card / row / list)', category: 'Navigation' },
-  { keys: ['←'], vimKeys: ['h'], label: 'Move cursor to the column on the left (Kanban) / previous (Home)', category: 'Navigation' },
-  { keys: ['→'], vimKeys: ['l'], label: 'Move cursor to the column on the right (Kanban) / next (Home)', category: 'Navigation' },
-  { keys: ['Esc'], label: 'Clear the cursor — then back to Home (on a board)', category: 'Navigation' },
+  { keys: ['↓'], vimKeys: ['j'], label: 'Move cursor down (next card / row · down a row in the Home grid)', category: 'Navigation' },
+  { keys: ['↑'], vimKeys: ['k'], label: 'Move cursor up (previous card / row · up a row in the Home grid)', category: 'Navigation' },
+  { keys: ['←'], vimKeys: ['h'], label: 'Move cursor left (column on the left in Kanban · a column over in the Home grid)', category: 'Navigation' },
+  { keys: ['→'], vimKeys: ['l'], label: 'Move cursor right (column on the right in Kanban · a column over in the Home grid)', category: 'Navigation' },
+  { keys: ['Esc'], label: 'Leave select mode · then clear the cursor · then back to Home', category: 'Navigation' },
 
   // Actions
   { keys: ['Enter'], label: 'Open the selected item (edit task · open board · add a card on a Kanban column header)', category: 'Actions' },
+  { keys: ['.'], label: 'Open the actions menu for the selected item (Move · Clone · View · Delete · or the board card menu on Home)', category: 'Actions' },
   { keys: ['Shift', 'N'], label: 'New task — in the cursor’s column on Kanban / new board (Home)', category: 'Actions', vimOnly: true },
-  { keys: ['a'], label: 'Archive the selected item', category: 'Actions', vimOnly: true },
+  { keys: ['a'], label: 'Archive the selected item (in select mode: the whole selection)', category: 'Actions', vimOnly: true },
   { keys: ['Shift', 'A'], label: 'Toggle archived (drawer on a board · show archived on Home)', category: 'Actions', vimOnly: true },
   { keys: ['Shift', 'C'], label: 'Configure columns (Kanban)', category: 'Actions', vimOnly: true },
-  { keys: ['Shift', 'D'], label: 'Delete the selected task — permanent (Kanban · TODO)', category: 'Actions', vimOnly: true },
-  { keys: ['m'], label: 'Pick up the selected item to move it', category: 'Actions', vimOnly: true },
+  { keys: ['Shift', 'D'], label: 'Delete the selected task — or the whole selection in select mode', category: 'Actions', vimOnly: true },
+  { keys: ['m'], label: 'Pick up the selected item to move it (within a board)', category: 'Actions', vimOnly: true },
+
+  // Selection — bulk-select tasks for Move / Archive / Delete.
+  { keys: ['s'], label: 'Toggle select mode (bulk task selection)', category: 'Selection', vimOnly: true },
+  { keys: ['x'], label: 'Toggle the cursored task’s selection (enters select mode)', category: 'Selection', vimOnly: true },
+  { keys: ['Enter', 'Space'], label: 'In select mode: toggle the cursored task’s selection', category: 'Selection' },
+  { keys: ['Shift', 'M'], label: 'Move the selection — or the cursored task — to another list', category: 'Selection', vimOnly: true },
 
   // Move mode — only reachable via `m`, so the whole section is Vim-only.
   { keys: ['j', 'k', 'h', 'l'], label: 'Relocate the picked-up item (also arrow keys)', category: 'Move mode', vimOnly: true },

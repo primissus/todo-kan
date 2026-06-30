@@ -91,6 +91,38 @@ export interface UiState {
   setArchivedOpen: (v: boolean) => void;
   kanbanColumnsOpen: boolean;
   setKanbanColumnsOpen: (v: boolean) => void;
+  /** Item whose per-item actions menu (the ⋮ dropdown on a card/row/board card)
+   *  is open; null = none. Lifted here so the global keymap (`.`) can open the
+   *  cursored item's menu, and only ONE menu is ever open app-wide. */
+  actionsMenuId: string | null;
+  setActionsMenuId: (id: string | null) => void;
+
+  /** Bulk task selection (board-scoped, ephemeral). When `selectionMode` is on,
+   *  cards/rows show a checkbox and a SelectionToolbar exposes Move/Archive/Delete.
+   *  `selectorOpen` is the searchable "Select tasks…" picker dialog. */
+  selectionMode: boolean;
+  selectedTaskIds: string[];
+  selectorOpen: boolean;
+  enterSelectionMode: () => void;
+  exitSelectionMode: () => void;
+  toggleTaskSelected: (id: string) => void;
+  setSelectedTasks: (ids: string[]) => void;
+  clearTaskSelection: () => void;
+  setSelectorOpen: (v: boolean) => void;
+  /** Move-to-list dialog, lifted so both the toolbar AND the keymap (⇧M) can open
+   *  it. `moveTaskIds` is the set it operates on (the selection, or one task). */
+  moveOpen: boolean;
+  moveTaskIds: string[];
+  openMove: (ids: string[]) => void;
+  setMoveOpen: (v: boolean) => void;
+  /** Bulk delete confirm, lifted for the same reason (⇧D). `bulkDeleteIds` is a
+   *  frozen snapshot of the selection so the confirm count is stable and the
+   *  delete acts on exactly what was confirmed. */
+  bulkDeleteOpen: boolean;
+  bulkDeleteIds: string[];
+  openBulkDelete: (ids: string[]) => void;
+  setBulkDeleteOpen: (v: boolean) => void;
+
   /** Close every lifted modal at once (e.g. on route change). */
   resetModals: () => void;
   homeShowArchived: boolean;
@@ -118,6 +150,14 @@ export const initialUiState = {
   deleteId: null,
   archivedOpen: false,
   kanbanColumnsOpen: false,
+  actionsMenuId: null,
+  selectionMode: false,
+  selectedTaskIds: [] as string[],
+  selectorOpen: false,
+  moveOpen: false,
+  moveTaskIds: [] as string[],
+  bulkDeleteOpen: false,
+  bulkDeleteIds: [] as string[],
   homeShowArchived: false,
   homeQuery: '',
 } as const;
@@ -157,6 +197,25 @@ export const useUiStore = create<UiState>((set) => ({
   setDeleteId: (id) => set({ deleteId: id }),
   setArchivedOpen: (v) => set({ archivedOpen: v }),
   setKanbanColumnsOpen: (v) => set({ kanbanColumnsOpen: v }),
+  setActionsMenuId: (id) => set({ actionsMenuId: id }),
+
+  enterSelectionMode: () => set({ selectionMode: true }),
+  exitSelectionMode: () =>
+    set({ selectionMode: false, selectedTaskIds: [], selectorOpen: false }),
+  toggleTaskSelected: (id) =>
+    set((s) => ({
+      selectedTaskIds: s.selectedTaskIds.includes(id)
+        ? s.selectedTaskIds.filter((x) => x !== id)
+        : [...s.selectedTaskIds, id],
+    })),
+  setSelectedTasks: (ids) => set({ selectedTaskIds: ids }),
+  clearTaskSelection: () => set({ selectedTaskIds: [] }),
+  setSelectorOpen: (v) => set({ selectorOpen: v }),
+  openMove: (ids) => set({ moveTaskIds: ids, moveOpen: true }),
+  setMoveOpen: (v) => set({ moveOpen: v }),
+  openBulkDelete: (ids) => set({ bulkDeleteIds: ids, bulkDeleteOpen: true }),
+  setBulkDeleteOpen: (v) => set({ bulkDeleteOpen: v }),
+
   resetModals: () =>
     set({
       newOpen: false,
@@ -165,6 +224,14 @@ export const useUiStore = create<UiState>((set) => ({
       deleteId: null,
       archivedOpen: false,
       kanbanColumnsOpen: false,
+      actionsMenuId: null,
+      selectionMode: false,
+      selectedTaskIds: [],
+      selectorOpen: false,
+      moveOpen: false,
+      moveTaskIds: [],
+      bulkDeleteOpen: false,
+      bulkDeleteIds: [],
       cmdline: null,
     }),
   setHomeShowArchived: (v) => set({ homeShowArchived: v }),

@@ -9,7 +9,12 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useIsMoveTarget, useIsSelected } from '@/hooks/useSelection';
+import {
+  useIsActionsMenuOpen,
+  useIsMoveTarget,
+  useIsSelected,
+} from '@/hooks/useSelection';
+import { useUiStore } from '@/store/useUiStore';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { useBoardListActions } from '@/features/boardActions/useBoardListActions';
 import { goBoard } from '@/lib/router';
 import { useAppStore } from '@/store/useAppStore';
 import { useBoardTasks } from '@/store/selectors';
@@ -34,8 +40,11 @@ export function BoardCard({ board, archived = false }: BoardCardProps) {
   const unarchiveBoard = useAppStore((s) => s.unarchiveBoard);
   const deleteBoard = useAppStore((s) => s.deleteBoard);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const listActions = useBoardListActions(board);
   const selected = useIsSelected(board.id);
   const moveTarget = useIsMoveTarget(board.id);
+  const menuOpen = useIsActionsMenuOpen(board.id);
+  const setActionsMenuId = useUiStore((s) => s.setActionsMenuId);
 
   const nodeRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -98,7 +107,10 @@ export function BoardCard({ board, archived = false }: BoardCardProps) {
       </button>
 
       <div className="absolute right-2 top-2">
-        <DropdownMenu>
+        <DropdownMenu
+          open={menuOpen}
+          onOpenChange={(o) => setActionsMenuId(o ? board.id : null)}
+        >
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
@@ -110,6 +122,12 @@ export function BoardCard({ board, archived = false }: BoardCardProps) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {!archived && (
+              <>
+                {listActions.items}
+                <DropdownMenuSeparator />
+              </>
+            )}
             {archived ? (
               <DropdownMenuItem onClick={() => unarchiveBoard(board.id)}>
                 <ArchiveRestore className="size-4" />
@@ -142,6 +160,8 @@ export function BoardCard({ board, archived = false }: BoardCardProps) {
         destructive
         onConfirm={() => deleteBoard(board.id)}
       />
+
+      {!archived && listActions.dialogs}
     </div>
   );
 }

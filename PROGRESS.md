@@ -1,5 +1,76 @@
 # Progress
 
+## 2026-06-30 — Selection keyboard shortcuts, grid-aware Home nav, keep-status move
+
+### Done
+- **Selection is fully keyboard-driven.** The cursor still moves in selection mode
+  and **Enter/Space toggle the cursored task** (both always-available — no Vim
+  needed). Vim keys: **`s`** toggles select mode, **`x`** toggles the cursored
+  task, **`a`** archives the selection, **⇧D** deletes it (confirm), **⇧M** moves
+  it (or a single cursored task) to another list. Added to the `?` cheat sheet
+  (new "Selection" category) in lockstep with the dispatch.
+- **Lifted bulk dialogs.** The Move dialog + bulk-delete confirm now live on
+  `useUiStore` (`moveOpen`/`moveTaskIds`/`bulkDeleteOpen`) and render in the board
+  views, so the toolbar buttons and the keyboard shortcuts run the exact same flow
+  (`features/selection/bulkActions.ts`).
+- **Grid-aware Home navigation.** The lists grid moves in 2D (`selectGrid` +
+  `homeGridColumns()` from the `sm:grid-cols-2 lg:grid-cols-3` breakpoints): ↑/↓
+  (j/k) by a row, ←/→ (h/l) by a column. Mobile (1 column) stays linear.
+- **Move keeps status by default.** The Move dialog's Kanban column picker defaults
+  to **"Current (keep status)"** (`columnId: undefined`); the new `landingColumnId`
+  helper keeps each task in a same-titled column (else Done/first), reused by
+  `mergeBoardInto`. Fixed a read-order bug (done-status must be read before
+  `columnId` is cleared).
+
+### Verification
+- `pnpm typecheck` clean · `pnpm lint` (3 pre-existing shadcn warnings) ·
+  **177/177 tests** (new keymap selection-mode + grid-nav cases, store keep-status,
+  uiStore lifted-dialog flags) · `pnpm build` + `pnpm build:single` both pass.
+- Hardened via a multi-agent adversarial review of the shortcuts, grid nav, lifted
+  dialogs and keep-status move.
+
+## 2026-06-29 — Bulk task selection, move, clone, merge & convert lists
+
+### Done
+- **Bulk selection** over one ephemeral set in `useUiStore` (`selectionMode`,
+  `selectedTaskIds`, `selectorOpen`; cleared by `resetModals` on route change).
+  Three cooperating surfaces in `src/features/selection/`: the searchable
+  **`TaskSelectorDialog`** (search bar + checkbox list + select-all), the inline
+  **checkbox** on every `KanbanCard`/`TaskRow` (granular `useSelectionMode`/
+  `useIsTaskSelected` selectors), and the **`SelectionToolbar`** (Select all ·
+  Search · **Move · Archive · Delete** · Done). **Esc** exits selection mode (new
+  first branch of the keymap's Esc back-out). The list menu's **Select tasks**
+  enters selection mode directly (the picker is the toolbar's Search affordance);
+  in selection mode the **whole card/row is the click target** that toggles its
+  selection, with drag and the other per-task affordances suppressed.
+- **Move to another list** (`MoveToListDialog`) re-homes the selection onto a
+  different TODO/Kanban board, with a column picker for Kanban targets — store
+  action `moveTasksToBoard`. Bulk `archiveTasks`/`deleteTasks` back the toolbar.
+- **List-item transforms** via the shared `useBoardListActions` hook
+  (`src/features/boardActions/`), surfaced on the Home `BoardCard` menu AND both
+  board headers: **Clone** (`cloneBoard`, copy via `buildExport`→`rekey`),
+  **Merge into…** (`mergeBoardInto`, type-confirm `merge list`), **Convert to
+  todo/kanban** (`convertBoard`, type-confirm `convert list`). The hook returns
+  menu `items` and `dialogs` separately (a Dialog inside a closing
+  `DropdownMenuContent` unmounts). The store closure is now `(set, get)`.
+- **Cross-type "done" reconciliation.** Because "done" is the TODO `completed`
+  flag on one board type and the `isDone` column on the other, `moveTasksToBoard`,
+  `mergeBoardInto` and `convertBoard` translate between the two (`taskWasDone`/
+  `doneColumnId` helpers) so a finished card never silently becomes active (or
+  lands in Pending) when it changes board type.
+
+### Verification
+- `pnpm typecheck` clean · `pnpm lint` (3 pre-existing shadcn warnings) ·
+  **165/165 tests** (new store coverage for move/clone/merge/convert + the
+  done-reconciliation, and uiStore selection-slice tests) · `pnpm build` +
+  `pnpm build:single` both pass.
+- Hardened via a multi-agent adversarial review: caught that move/merge/convert
+  dropped a card's Done status across board types (now reconciled), `convertBoard`
+  left a stale `completed=true` on non-Done cards (now derived from Done
+  membership), and the toolbar "Select all" used a count comparison + replace that
+  could mislabel and shrink an out-of-view selection (now true membership + a
+  union/difference toggle).
+
 ## 2026-06-26 — File sync, read-only task view, time-first reminders, Kanban header nav
 
 ### Done

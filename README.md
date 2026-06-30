@@ -9,6 +9,10 @@ a **single HTML file** you can open by double-clicking.
 - 📋 **TODO lists** and 🗂️ **Kanban boards** side by side on one home screen.
 - 🔍 **Search** across title, description, and tags — or type `#tag` to search tags only.
 - 🧲 **Drag and drop** to reorder tasks, and to move Kanban cards between columns.
+- ☑️ **Select tasks in bulk** (searchable picker or inline checkboxes) to **move,
+  archive, or delete** many at once.
+- 🔀 **Reshape lists**: **clone** a list, **merge** one into another, or **convert**
+  a list between TODO ⇄ Kanban — done status is preserved across the change.
 - 🗃️ **Archive** whole lists/boards or individual tasks — and bring them back.
 - ⏰ **Due dates & reminders** with in-tab browser notifications.
 - 💬 **Discussion threads** on any task, with linkified notes and descriptions.
@@ -49,6 +53,15 @@ browser — your data is saved locally in that browser.
   add cards, drag them within and across columns, "Archive done" in one click. With
   keyboard nav, the column headers are cursor targets too — ↑ from the first card,
   ←/→ across columns — and a new card inherits the column you’re on.
+- **Bulk actions & list tools** (each list's **⋯** menu): **Select tasks** turns on
+  selection mode — click any task (or use the keyboard: `s` to start, arrows +
+  Enter/Space to pick, `⇧M`/`a`/`⇧D` to move/archive/delete) to act on many at
+  once via the **Move / Archive / Delete** toolbar (whose **Search** button opens a
+  searchable picker). Moving to a Kanban board keeps each task's status by default.
+  The same menu can **Clone** a list,
+  **Merge** it into another (type `merge list`), or **Convert** it between TODO and
+  Kanban (type `convert list`). Clone/Merge/Convert are also on each card's menu on
+  the home page.
 - **Settings** (gear, top right): theme & appearance, reminders, export, import,
   **sync to a file**, and a guarded "Clear all" (type `delete all tasks`).
 

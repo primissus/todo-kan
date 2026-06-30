@@ -4,6 +4,18 @@ Working guide for AI agents (and humans) editing **todo-kan**. Read this before
 making changes. Companion docs: [REQUIREMENTS.md](./REQUIREMENTS.md),
 [PLAN.md](./PLAN.md), [PROGRESS.md](./PROGRESS.md).
 
+## Project context
+
+Axis-specific context docs — load the one matching your task (this guide stays the
+deep reference):
+
+- Architecture → [.context/architecture.md](./.context/architecture.md)
+- Conventions → [.context/conventions.md](./.context/conventions.md)
+- Decisions → [.context/decisions.md](./.context/decisions.md)
+- Glossary → [.context/glossary.md](./.context/glossary.md)
+- Workflow → [.context/workflow.md](./.context/workflow.md)
+- Known issues → [.context/known-issues.md](./.context/known-issues.md)
+
 ## What this is
 
 A local-first SPA for multiple TODO lists and Kanban boards. No backend — all
@@ -69,9 +81,11 @@ src/
     BoardHeader.tsx, TaskFormDialog.tsx (create), TaskDialog.tsx (unified view/edit
     + due/reminder + discussion), NoteThread.tsx (the note thread, embedded in TaskDialog),
     ArchivedTasksDrawer.tsx                                        # shared by both views
-    home/    HomePage, BoardCard
-    todo/    TodoView, TaskRow
-    kanban/  KanbanView, Column, KanbanCard, ColumnsSettings
+    home/         HomePage, BoardCard
+    todo/         TodoView, TaskRow
+    kanban/       KanbanView, Column, KanbanCard, ColumnsSettings
+    selection/    TaskSelectorDialog, SelectionToolbar, MoveToListDialog  # bulk select / move / archive / delete
+    boardActions/ useBoardListActions (hook) + CloneListDialog, MergeListDialog, ConvertListDialog  # list-item transforms
   styles/ globals.css, theme.css
   test/   setup.ts, store.test.ts, notes.test.ts, render.test.tsx,
           keymap.test.tsx, keymapTable.test.ts, hints.test.ts,
@@ -126,7 +140,9 @@ src/
   (`moveMode` + an order `moveSnapshot` for Esc-revert), the Vim-keys toggle
   (`vimEnabled`) + command-line buffer (`cmdline`), and overlay/modal flags
   (`paletteOpen`, `helpOpen`, `hintsActive`, `newOpen`, `editId`, `deleteId`,
-  `archivedOpen`, `kanbanColumnsOpen`, `homeShowArchived`, `homeQuery`), plus
+  `archivedOpen`, `kanbanColumnsOpen`, `homeShowArchived`, `homeQuery`), the
+  **bulk-selection slice** (`selectionMode` + `selectedTaskIds` + `selectorOpen`,
+  all cleared by `resetModals`), plus
   `pendingSelectId` (a task to focus AFTER the next route change — set by a Home
   search result that targets a task on another board, consumed by the keymap's
   route-reset effect). `editId` opens the unified `TaskDialog` (view/edit + due/
@@ -160,7 +176,10 @@ src/
   (even empty ones); `selectedId` may then be a column id (header actions like
   `a`/`m`/Shift+D are guarded off). **Shift+N**/**Enter** on a header (and Shift+N
   on any card) opens the create form for the cursor's column via
-  `useUiStore.newColumnId`.
+  `useUiStore.newColumnId`. **The Home lists grid is navigated 2D** — `selectGrid`
+  steps ↑/↓ (`j`/`k`) by a full row and ←/→ (`h`/`l`) by one column, using
+  `homeGridColumns()` (reads `matchMedia` for the `sm:grid-cols-2 lg:grid-cols-3`
+  breakpoints; degenerates to linear at 1 column on mobile).
 - **Task dialog & scheduling.** Opening a task (Enter / clicking the card / its
   **eye / "view"** open button — the dialog opens read-only first) shows
   `features/TaskDialog.tsx` — a view/edit modal that opens **read-only**
@@ -218,6 +237,44 @@ src/
   prefix. Results are navigated inline (↑/↓/Enter while the search box is focused);
   picking a task sets `pendingSelectId` then navigates to its board so the view
   highlights it on arrival.
+- **Bulk selection + list transforms.** One ephemeral selection set in
+  `useUiStore` (`selectionMode`/`selectedTaskIds`/`selectorOpen`, cleared on route
+  change) backs three surfaces: the inline checkbox on each card/row (gated by
+  `useSelectionMode`/`useIsTaskSelected` in `useSelection.ts`), the
+  `SelectionToolbar` (Move / Archive / Delete on the checked tasks), and the
+  searchable `TaskSelectorDialog` (a checkbox + search picker). The list menu's
+  **Select tasks** entry calls `enterSelectionMode()` directly; the dialog is
+  opened only from the toolbar's **Search** button (`selectorOpen`). While
+  selection mode is on the **whole `KanbanCard`/`TaskRow` is the click target** that
+  toggles its selection: drag is `disabled` in `useSortable`, the per-task buttons /
+  complete checkbox are hidden, and the description is `pointer-events-none` — so a
+  click can't accidentally open/drag the task or follow an in-card link. Esc exits
+  selection mode (first branch of the keymap's Esc back-out — selection mode is
+  NOT a dialog, so the keymap still runs). **Keyboard:** the cursor still moves in
+  selection mode and **Enter/Space** toggle the cursored task (both always-available
+  — no Vim needed); the Vim keys `s` (toggle mode), `x` (toggle item), `a`/`Shift+D`
+  (the whole selection), `Shift+M` (move the selection, or a single cursored task)
+  drive it. The bulk **Move dialog + delete confirm are lifted to `useUiStore`**
+  (`moveOpen`/`moveTaskIds`/`bulkDeleteOpen`/`bulkDeleteIds`) and rendered by the board views, so
+  the toolbar buttons and the keyboard shortcuts run the SAME flows — orchestrated
+  by `features/selection/bulkActions.ts` (`archiveSelection`/`requestMove`/
+  `requestDeleteSelection`/`deleteSelection`/`completeMove`/`finishSelection`).
+  The store gained the bulk/board actions
+  `archiveTasks`, `deleteTasks`, `moveTasksToBoard`, `cloneBoard` (copy via
+  `buildExport`→`rekey`), `mergeBoardInto`, `convertBoard` (the store closure is
+  now `(set, get)` so `cloneBoard` can read state). **Done is represented two
+  ways** — the TODO `completed` flag vs. the Kanban `isDone` column — so any action
+  that re-homes a task across board types (`moveTasksToBoard`, `mergeBoardInto`,
+  `convertBoard`) reconciles them via `taskWasDone`/`doneColumnId`/`landingColumnId`
+  (read done-status BEFORE clearing `columnId`; the Move dialog's **"Current (keep
+  status)"** default passes `columnId: undefined` so the store keeps each task's
+  status — a same-titled column, else Done/first). The list-item
+  actions (Clone / Merge into… / Convert) are wired once in `useBoardListActions`,
+  reused by the Home `BoardCard` menu and both board headers; it returns the menu
+  `items` and the backing `dialogs` **separately** because a `Dialog` rendered
+  inside a closing `DropdownMenuContent` unmounts — always render such dialogs as
+  a sibling of the menu, controlled by state (the existing `BoardCard` delete
+  pattern).
 
 ## Conventions
 
@@ -287,9 +344,13 @@ src/
   tokenizer; `markdown.test.ts` covers the Markdown parser + `safeHref`, and
   `markdownRender.test.tsx` the renderer (copy button, verbatim code, inert unsafe
   links); `datetime.test.ts` covers the pure date-picker math; `hints.test.ts`
-  + `uiStore.test.ts` cover the pure/ephemeral pieces. `store.test.ts` also covers
-  `type:` query parsing and `dueAt`/`remindAt` edits; `render.test.tsx` covers the
-  unified TaskDialog live-edit and the Home `type:task` jump-to-task flow.
+  + `uiStore.test.ts` cover the pure/ephemeral pieces (incl. the bulk-selection
+  slice + `resetModals` clearing it). `store.test.ts` also covers `type:` query
+  parsing, `dueAt`/`remindAt` edits, and the bulk/board actions
+  (`moveTasksToBoard`, `archiveTasks`/`deleteTasks`, `cloneBoard`,
+  `mergeBoardInto`, `convertBoard`) — including the cross-type done-status
+  reconciliation; `render.test.tsx` covers the unified TaskDialog live-edit and
+  the Home `type:task` jump-to-task flow.
 - After UI/logic changes, run `pnpm typecheck && pnpm lint && pnpm test`, then
   `pnpm build` and `pnpm build:single`. Note `tsc -b` type-checks the test files
   too — a green `vitest` run is not enough on its own. That is the full automated

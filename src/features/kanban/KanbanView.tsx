@@ -17,6 +17,7 @@ import {
   Archive,
   CheckCheck,
   Eraser,
+  ListChecks,
   MoreVertical,
   Plus,
   Settings2,
@@ -36,6 +37,11 @@ import { TaskFormDialog } from '@/features/TaskFormDialog';
 import { TaskDialog } from '@/features/TaskDialog';
 import { ArchivedTasksDrawer } from '@/features/ArchivedTasksDrawer';
 import { ColumnsSettings } from '@/features/kanban/ColumnsSettings';
+import { SelectionToolbar } from '@/features/selection/SelectionToolbar';
+import { TaskSelectorDialog } from '@/features/selection/TaskSelectorDialog';
+import { MoveToListDialog } from '@/features/selection/MoveToListDialog';
+import { completeMove, deleteSelection } from '@/features/selection/bulkActions';
+import { useBoardListActions } from '@/features/boardActions/useBoardListActions';
 import { TypeToConfirmModal } from '@/components/TypeToConfirmModal';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { useAppStore } from '@/store/useAppStore';
@@ -80,6 +86,17 @@ export function KanbanView({ boardId }: KanbanViewProps) {
   const setArchivedOpen = useUiStore((s) => s.setArchivedOpen);
   const columnsOpen = useUiStore((s) => s.kanbanColumnsOpen);
   const setColumnsOpen = useUiStore((s) => s.setKanbanColumnsOpen);
+  const selectionMode = useUiStore((s) => s.selectionMode);
+  const enterSelectionMode = useUiStore((s) => s.enterSelectionMode);
+  const selectorOpen = useUiStore((s) => s.selectorOpen);
+  const setSelectorOpen = useUiStore((s) => s.setSelectorOpen);
+  const moveOpen = useUiStore((s) => s.moveOpen);
+  const moveTaskIds = useUiStore((s) => s.moveTaskIds);
+  const setMoveOpen = useUiStore((s) => s.setMoveOpen);
+  const bulkDeleteOpen = useUiStore((s) => s.bulkDeleteOpen);
+  const setBulkDeleteOpen = useUiStore((s) => s.setBulkDeleteOpen);
+  const bulkDeleteIds = useUiStore((s) => s.bulkDeleteIds);
+  const listActions = useBoardListActions(board);
 
   const [clearOpen, setClearOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -193,6 +210,13 @@ export function KanbanView({ boardId }: KanbanViewProps) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => enterSelectionMode()}>
+              <ListChecks className="size-4" />
+              Select tasks
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {listActions.items}
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => setColumnsOpen(true)}>
               <Settings2 className="size-4" />
               Columns
@@ -212,6 +236,7 @@ export function KanbanView({ boardId }: KanbanViewProps) {
           </DropdownMenuContent>
         </DropdownMenu>
         </BoardHeader>
+        {selectionMode && <SelectionToolbar boardId={boardId} />}
       </div>
 
       <DndContext
@@ -326,6 +351,32 @@ export function KanbanView({ boardId }: KanbanViewProps) {
         confirmLabel="Clear board"
         onConfirm={() => clearBoard(boardId)}
       />
+
+      <TaskSelectorDialog
+        boardId={boardId}
+        open={selectorOpen}
+        onOpenChange={setSelectorOpen}
+      />
+
+      <MoveToListDialog
+        taskIds={moveTaskIds}
+        sourceBoardId={boardId}
+        open={moveOpen}
+        onOpenChange={setMoveOpen}
+        onMoved={completeMove}
+      />
+
+      <ConfirmModal
+        open={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+        title={`Delete ${bulkDeleteIds.length} task${bulkDeleteIds.length === 1 ? '' : 's'}?`}
+        description="The selected tasks will be permanently deleted."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={deleteSelection}
+      />
+
+      {listActions.dialogs}
     </div>
   );
 }
