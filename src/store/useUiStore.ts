@@ -104,6 +104,19 @@ export interface UiState {
   setSelectedTasks: (ids: string[]) => void;
   clearTaskSelection: () => void;
   setSelectorOpen: (v: boolean) => void;
+  /** Move-to-list dialog, lifted so both the toolbar AND the keymap (⇧M) can open
+   *  it. `moveTaskIds` is the set it operates on (the selection, or one task). */
+  moveOpen: boolean;
+  moveTaskIds: string[];
+  openMove: (ids: string[]) => void;
+  setMoveOpen: (v: boolean) => void;
+  /** Bulk delete confirm, lifted for the same reason (⇧D). `bulkDeleteIds` is a
+   *  frozen snapshot of the selection so the confirm count is stable and the
+   *  delete acts on exactly what was confirmed. */
+  bulkDeleteOpen: boolean;
+  bulkDeleteIds: string[];
+  openBulkDelete: (ids: string[]) => void;
+  setBulkDeleteOpen: (v: boolean) => void;
 
   /** Close every lifted modal at once (e.g. on route change). */
   resetModals: () => void;
@@ -135,6 +148,10 @@ export const initialUiState = {
   selectionMode: false,
   selectedTaskIds: [] as string[],
   selectorOpen: false,
+  moveOpen: false,
+  moveTaskIds: [] as string[],
+  bulkDeleteOpen: false,
+  bulkDeleteIds: [] as string[],
   homeShowArchived: false,
   homeQuery: '',
 } as const;
@@ -187,6 +204,10 @@ export const useUiStore = create<UiState>((set) => ({
   setSelectedTasks: (ids) => set({ selectedTaskIds: ids }),
   clearTaskSelection: () => set({ selectedTaskIds: [] }),
   setSelectorOpen: (v) => set({ selectorOpen: v }),
+  openMove: (ids) => set({ moveTaskIds: ids, moveOpen: true }),
+  setMoveOpen: (v) => set({ moveOpen: v }),
+  openBulkDelete: (ids) => set({ bulkDeleteIds: ids, bulkDeleteOpen: true }),
+  setBulkDeleteOpen: (v) => set({ bulkDeleteOpen: v }),
 
   resetModals: () =>
     set({
@@ -199,6 +220,10 @@ export const useUiStore = create<UiState>((set) => ({
       selectionMode: false,
       selectedTaskIds: [],
       selectorOpen: false,
+      moveOpen: false,
+      moveTaskIds: [],
+      bulkDeleteOpen: false,
+      bulkDeleteIds: [],
       cmdline: null,
     }),
   setHomeShowArchived: (v) => set({ homeShowArchived: v }),

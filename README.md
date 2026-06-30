@@ -53,9 +53,12 @@ browser — your data is saved locally in that browser.
   add cards, drag them within and across columns, "Archive done" in one click. With
   keyboard nav, the column headers are cursor targets too — ↑ from the first card,
   ←/→ across columns — and a new card inherits the column you’re on.
-- **Bulk actions & list tools** (each list's **⋯** menu): **Select tasks…** opens
-  a searchable picker; checking tasks turns on selection mode (inline checkboxes +
-  a **Move / Archive / Delete** toolbar). The same menu can **Clone** a list,
+- **Bulk actions & list tools** (each list's **⋯** menu): **Select tasks** turns on
+  selection mode — click any task (or use the keyboard: `s` to start, arrows +
+  Enter/Space to pick, `⇧M`/`a`/`⇧D` to move/archive/delete) to act on many at
+  once via the **Move / Archive / Delete** toolbar (whose **Search** button opens a
+  searchable picker). Moving to a Kanban board keeps each task's status by default.
+  The same menu can **Clone** a list,
   **Merge** it into another (type `merge list`), or **Convert** it between TODO and
   Kanban (type `convert list`). Clone/Merge/Convert are also on each card's menu on
   the home page.

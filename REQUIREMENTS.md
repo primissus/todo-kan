@@ -63,7 +63,8 @@ Vim-style keyboard control, added after the initial spec and made **opt-in**.
    letter motions / hints / Shift-combos below are inactive.
 1. **`j` / `k` / `h` / `l` and arrow keys** move a **selection cursor** (arrows
    always; `j`/`k`/`h`/`l` only with Vim keys on). Kanban: `j`/`k` within a column,
-   `h`/`l` between columns. TODO: `j`/`k` between rows. Home: across cards.
+   `h`/`l` between columns. TODO: `j`/`k` between rows. Home: **2D grid** — `j`/`k`
+   (↑/↓) by a row, `h`/`l` (←/→) by a column.
 2. **`m`** picks up the selected item to **move** it; `j`/`k`/`h`/`l`/arrows
    relocate it live, **Enter** drops it, **Esc** snaps it back. Works for Kanban
    cards (reorder + change column), TODO rows (reorder), and Home cards (reorder).
@@ -91,20 +92,25 @@ Added after the initial spec. Operate on a board's tasks (1, 2, 6) or on a whole
 list/board (3, 4, 5).
 
 1. **Task selector** — a dialog with a **search bar** and a checkbox list to
-   select **multiple or all** of a list's tasks (the "More → Select tasks…"
-   entry). Applying it enters selection mode.
+   select **multiple or all** of a list's tasks; reached from the selection
+   toolbar's **Search** button.
 2. **Move to another list** — move the selected task(s) onto a **different** list
    or board (TODO **or** Kanban). When the destination is Kanban you pick the
-   landing **column**.
+   landing **column**; the default is **"Current"** (keep each task's status — a
+   same-titled column, else Done/first).
 3. **Clone list** — a list-item action that copies a whole list/board and all its
    tasks; a modal asks for the copy's **title**.
 4. **Merge into** — a list-item action that moves every task of the list into
    another list and **deletes the source**. Guarded by typing **`merge list`**.
 5. **Convert** — flip a list between its two types (**`todo ⇄ kanban`**). Guarded
    by typing **`convert list`**.
-6. **Selection mode** — shows a selection **checkbox** on every task and a toolbar
-   that enables **Move**, **Archive**, and **Delete** on the checked tasks; **Esc**
-   leaves selection mode.
+6. **Selection mode** — the "More → **Select tasks**" entry shows a selection
+   **checkbox** on every task and a toolbar that enables **Move**, **Archive**, and
+   **Delete** on the checked tasks; **Esc** leaves selection mode. The whole
+   card/row is the click target, and it's keyboard-driven too: the cursor still
+   moves (arrows / `j`/`k`), **Enter**/**Space** toggle the cursored task, and the
+   Vim keys **`s`** (toggle mode) · **`x`** (toggle item) · **⇧M** (move) ·
+   **`a`** (archive) · **⇧D** (delete) act on the selection.
 
 Interpretation: "done" has two representations (the TODO `completed` flag vs. the
 Kanban `isDone` column), so move/merge/convert **translate between them** when a

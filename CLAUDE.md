@@ -24,8 +24,12 @@ After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and
   cursor/overlay state in the persisted store.
 - **Keyboard nav**: one global `keydown` listener in `src/hooks/useGlobalKeymap.ts`
   (mounted once in `App`) drives a Vim-style cursor (j/k/h/l + arrows), move-mode
-  (`m`), actions (Enter/`a`/Shift+A/Shift+C/Shift+D-delete/Shift+N), search
-  (`/` ⌘K), hints (`f`), help (`?`). **Vim keys are opt-in** (`useUiStore.vimEnabled`,
+  (`m`), actions (Enter/`a`/Shift+A/Shift+C/Shift+D-delete/Shift+N), bulk
+  **selection** (`s` mode · `x` toggle item · Shift+M move · `a`/Shift+D act on the
+  selection in select mode), search (`/` ⌘K), hints (`f`), help (`?`). The **Home
+  list grid is navigated 2D**: ↑/↓ (j/k) move by a row, ←/→ (h/l) by a column —
+  `selectGrid` + `homeGridColumns()` (matches `sm:grid-cols-2 lg:grid-cols-3` via
+  `matchMedia`). **Vim keys are opt-in** (`useUiStore.vimEnabled`,
   off by default, persisted to the `todokan:vim-enabled` localStorage key): when
   off only the "simple" keys fire (arrows, Enter, Esc, ⌘K, `?`, `:`). Toggle via
   the bottom-left command line (`src/components/CommandLine.tsx`) — press `:`,
@@ -81,22 +85,39 @@ After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and
 - **Bulk selection + list transforms**: a per-board, **ephemeral** selection set
   lives in `useUiStore` (`selectionMode`, `selectedTaskIds`, `selectorOpen`;
   cleared by `resetModals` on route change). Each list's **More** menu → **"Select
-  tasks…"** opens the searchable `TaskSelectorDialog` (`src/features/selection/`);
-  applying it turns on **selection mode**, which shows a checkbox on every
-  card/row (`useSelectionMode`/`useIsTaskSelected` in `useSelection.ts`) and a
+  tasks"** turns on **selection mode** directly — a checkbox on every card/row
+  (`useSelectionMode`/`useIsTaskSelected` in `useSelection.ts`) plus a
   **`SelectionToolbar`** (Select all · Search · **Move · Archive · Delete** ·
-  Done). Esc exits selection mode (handled first in the keymap's Esc back-out).
-  **Move** (`MoveToListDialog`) re-homes the selection onto another board via
-  `moveTasksToBoard`. **List-item actions** come from the shared
-  `useBoardListActions` hook (`src/features/boardActions/`, rendered on the Home
-  `BoardCard` menu AND both board headers): **Clone** (`cloneBoard` — copy via the
-  export→rekey path), **Merge into…** (`mergeBoardInto`, type-confirm `merge
-  list`), **Convert to todo/kanban** (`convertBoard`, type-confirm `convert
-  list`). Crossing board types, move/merge/convert all reconcile the two "done"
-  representations — TODO `completed` ⇄ Kanban `isDone` column — via the
-  `taskWasDone`/`doneColumnId` helpers. **Dialogs opened from a dropdown render
-  OUTSIDE the menu** (a `Dialog` inside a closing `DropdownMenuContent` unmounts);
-  `useBoardListActions` returns its menu `items` and `dialogs` separately for this.
+  Done). The searchable `TaskSelectorDialog` (`src/features/selection/`, search +
+  checkbox list + select-all) is the toolbar's **Search** affordance (it sets
+  `selectorOpen`), not the menu entry. **In selection mode each card/row is itself
+  the click target** (a click toggles its selection); its other affordances are
+  suppressed — drag is `disabled` in `useSortable`, the open/archive/notes buttons
+  and the complete-toggle are hidden, and the description Markdown is
+  `pointer-events-none` so a stray link click can't fire. **The keyboard cursor
+  still moves in selection mode** (j/k/arrows) and **Enter / Space toggle the
+  cursored task** (both always-available — selection is fully usable without Vim);
+  the Vim keys `s` (toggle mode), `x` (toggle item), `a`/Shift+D (the selection),
+  Shift+M (move) drive the same flows. Esc exits selection mode (handled first in
+  the keymap's Esc back-out). The bulk **Move dialog + delete confirm are lifted to
+  `useUiStore`** (`moveOpen`/`moveTaskIds`/`bulkDeleteOpen`/`bulkDeleteIds`) and rendered by the
+  board views, so the toolbar buttons AND the keyboard shortcuts run the **same**
+  flows (orchestrated by `src/features/selection/bulkActions.ts`).
+  **Move** (`MoveToListDialog`) re-homes the selection (or one cursored task via
+  Shift+M) onto another board via `moveTasksToBoard`; its Kanban column picker
+  defaults to **"Current (keep status)"** — passing `columnId: undefined` so the
+  store keeps each task's status (same-titled column via `landingColumnId`, else
+  Done/first). **List-item actions** come from the shared `useBoardListActions`
+  hook (`src/features/boardActions/`, rendered on the Home `BoardCard` menu AND both
+  board headers): **Clone** (`cloneBoard` — copy via the export→rekey path),
+  **Merge into…** (`mergeBoardInto`, type-confirm `merge list`), **Convert to
+  todo/kanban** (`convertBoard`, type-confirm `convert list`). Crossing board types,
+  move/merge/convert all reconcile the two "done" representations — TODO `completed`
+  ⇄ Kanban `isDone` column — via `taskWasDone`/`doneColumnId`/`landingColumnId`
+  (read done-status BEFORE clearing `columnId`). **Dialogs opened from a dropdown
+  render OUTSIDE the menu** (a `Dialog` inside a closing `DropdownMenuContent`
+  unmounts); `useBoardListActions` returns its menu `items` and `dialogs`
+  separately for this.
 - **Task view dialog** (`src/features/TaskDialog.tsx`): the unified view/edit modal
   opened via `useUiStore.editId` (Enter / clicking a card or its open button — an
   **eye / "view"** icon on the card/row, since the dialog opens read-only first). It

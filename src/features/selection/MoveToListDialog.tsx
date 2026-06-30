@@ -14,12 +14,16 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
 import { useAppStore } from '@/store/useAppStore';
 import { useOrderedBoards } from '@/store/selectors';
 import type { ColumnId } from '@/lib/types/domain';
+
+/** Column-picker sentinel: keep each task's status (don't force one column). */
+const KEEP_STATUS = '__current__';
 
 export interface MoveToListDialogProps {
   taskIds: string[];
@@ -55,19 +59,20 @@ export function MoveToListDialog({
   const target = targets.find((b) => b.id === targetId);
   const isKanbanTarget = target?.type === 'kanban';
 
-  // Default the column to the first one when a Kanban target is picked.
+  // Default a Kanban target to "Current" — keep each task's status.
   useEffect(() => {
-    if (isKanbanTarget && target) setColumnId(target.columns[0]?.id ?? '');
-    else setColumnId('');
-  }, [targetId, isKanbanTarget, target]);
+    setColumnId(isKanbanTarget ? KEEP_STATUS : '');
+  }, [targetId, isKanbanTarget]);
 
   const submit = () => {
     if (!target || taskIds.length === 0) return;
-    moveTasksToBoard(
-      taskIds,
-      target.id,
-      isKanbanTarget ? (columnId as ColumnId) : null,
-    );
+    // null → TODO target; undefined → keep status; else the chosen column.
+    const columnArg: ColumnId | null | undefined = !isKanbanTarget
+      ? null
+      : columnId === KEEP_STATUS
+        ? undefined
+        : (columnId as ColumnId);
+    moveTasksToBoard(taskIds, target.id, columnArg);
     onMoved?.(taskIds.length, target.title || 'Untitled');
     onOpenChange(false);
   };
@@ -120,6 +125,10 @@ export function MoveToListDialog({
                     <SelectValue placeholder="Choose a column…" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value={KEEP_STATUS}>
+                      Current (keep status)
+                    </SelectItem>
+                    <SelectSeparator />
                     {target.columns
                       .slice()
                       .sort((a, b) => a.order - b.order)

@@ -221,6 +221,16 @@ describe('moveTasksToBoard', () => {
     expect(task(a).columnId).toBe(done);
     expect(task(a).completed).toBe(false); // normalized for kanban
   });
+
+  it('keeps status on a kanban→kanban move by matching the column title (no explicit column)', () => {
+    const src = s().createBoard('kanban');
+    const dst = s().createBoard('kanban');
+    const srcInProgress = board(src).columns[1].id; // "In Progress"
+    const dstInProgress = board(dst).columns[1].id;
+    const a = s().addTask(src, { title: 'a', columnId: srcInProgress });
+    s().moveTasksToBoard([a], dst); // no explicit column → keep status
+    expect(task(a).columnId).toBe(dstInProgress);
+  });
 });
 
 describe('cloneBoard', () => {

@@ -530,3 +530,139 @@ describe('f hint mode reaches an open dialog (the task form)', () => {
     expect(useUiStore.getState().hintsActive).toBe(false);
   });
 });
+
+describe('bulk selection (keyboard)', () => {
+  it('s enters selection mode; Enter toggles the cursored task; s exits', async () => {
+    const { a } = await renderTodo();
+    fireEvent.keyDown(window, { key: 'j' }); // cursor → a
+    expect(useUiStore.getState().selectedId).toBe(a);
+    fireEvent.keyDown(window, { key: 's' });
+    expect(useUiStore.getState().selectionMode).toBe(true);
+    fireEvent.keyDown(window, { key: 'Enter' });
+    expect(useUiStore.getState().selectedTaskIds).toContain(a);
+    fireEvent.keyDown(window, { key: 'Enter' }); // toggle off
+    expect(useUiStore.getState().selectedTaskIds).not.toContain(a);
+    fireEvent.keyDown(window, { key: 's' });
+    expect(useUiStore.getState().selectionMode).toBe(false);
+  });
+
+  it('x selects the cursored task, entering selection mode', async () => {
+    const { a } = await renderTodo();
+    fireEvent.keyDown(window, { key: 'j' });
+    fireEvent.keyDown(window, { key: 'x' });
+    expect(useUiStore.getState().selectionMode).toBe(true);
+    expect(useUiStore.getState().selectedTaskIds).toEqual([a]);
+  });
+
+  it('Space toggles the cursored task in selection mode (works without Vim keys)', async () => {
+    const { a } = await renderTodo();
+    useUiStore.setState({ vimEnabled: false });
+    fireEvent.keyDown(window, { key: 'ArrowDown' }); // cursor → a (arrows always work)
+    act(() => useUiStore.getState().enterSelectionMode());
+    fireEvent.keyDown(window, { key: ' ' });
+    expect(useUiStore.getState().selectedTaskIds).toContain(a);
+  });
+
+  it('a archives the whole selection and exits selection mode', async () => {
+    const { a, b } = await renderTodo();
+    act(() => {
+      useUiStore.getState().enterSelectionMode();
+      useUiStore.getState().setSelectedTasks([a, b]);
+    });
+    fireEvent.keyDown(window, { key: 'a' });
+    expect(useAppStore.getState().tasks[a].archived).toBe(true);
+    expect(useAppStore.getState().tasks[b].archived).toBe(true);
+    expect(useUiStore.getState().selectionMode).toBe(false);
+  });
+
+  it('⇧D opens the bulk delete confirm for the selection', async () => {
+    const { a } = await renderTodo();
+    act(() => {
+      useUiStore.getState().enterSelectionMode();
+      useUiStore.getState().setSelectedTasks([a]);
+    });
+    fireEvent.keyDown(window, { key: 'D', shiftKey: true });
+    expect(useUiStore.getState().bulkDeleteOpen).toBe(true);
+  });
+
+  it('⇧M opens the move dialog for the selection', async () => {
+    const { a, b } = await renderTodo();
+    act(() => {
+      useUiStore.getState().enterSelectionMode();
+      useUiStore.getState().setSelectedTasks([a, b]);
+    });
+    fireEvent.keyDown(window, { key: 'M', shiftKey: true });
+    expect(useUiStore.getState().moveOpen).toBe(true);
+    expect(useUiStore.getState().moveTaskIds).toEqual([a, b]);
+  });
+
+  it('Esc leaves selection mode before clearing the cursor', async () => {
+    const { a } = await renderTodo();
+    fireEvent.keyDown(window, { key: 'j' });
+    fireEvent.keyDown(window, { key: 'x' }); // select a + enter selection mode
+    expect(useUiStore.getState().selectionMode).toBe(true);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(useUiStore.getState().selectionMode).toBe(false);
+    // cursor survives the first Esc (selection mode consumed it)
+    expect(useUiStore.getState().selectedId).toBe(a);
+  });
+});
+
+describe('Home lists grid navigation', () => {
+  it('moves by a row vertically and by a column horizontally', async () => {
+    const realMM = window.matchMedia;
+    // 2-column grid: (min-width: 640px) matches, (min-width: 1024px) does not.
+    window.matchMedia = ((q: string) => ({
+      matches: q.includes('640'),
+      media: q,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      for (const n of ['A', 'B', 'C', 'D']) {
+        useAppStore.getState().createBoard('todo', n);
+      }
+      window.location.hash = '';
+      render(<App />);
+      await screen.findByText('A');
+      const order = useAppStore.getState().boardOrder;
+
+      fireEvent.keyDown(window, { key: 'ArrowDown' }); // → first list (index 0)
+      expect(useUiStore.getState().selectedId).toBe(order[0]);
+      fireEvent.keyDown(window, { key: 'ArrowDown' }); // down a row → +2
+      expect(useUiStore.getState().selectedId).toBe(order[2]);
+      fireEvent.keyDown(window, { key: 'ArrowUp' }); // back up a row → 0
+      expect(useUiStore.getState().selectedId).toBe(order[0]);
+      fireEvent.keyDown(window, { key: 'ArrowRight' }); // right a column → +1
+      expect(useUiStore.getState().selectedId).toBe(order[1]);
+    } finally {
+      window.matchMedia = realMM;
+    }
+  });
+});
+
+describe('review fixes', () => {
+  it('does not navigate the hidden board grid while Home search is active', async () => {
+    await renderHome();
+    act(() => useUiStore.getState().setHomeQuery('board'));
+    fireEvent.keyDown(window, { key: 'ArrowDown' });
+    expect(useUiStore.getState().selectedId).toBeNull();
+    fireEvent.keyDown(window, { key: 'Enter' });
+    // Still on Home (Enter didn't jump to an off-screen board).
+    expect(window.location.hash).toBe('');
+  });
+
+  it('⇧M is a no-op in selection mode with an empty selection', async () => {
+    await renderTodo();
+    fireEvent.keyDown(window, { key: 'j' }); // cursor → a task
+    fireEvent.keyDown(window, { key: 's' }); // enter selection mode, nothing checked
+    expect(useUiStore.getState().selectionMode).toBe(true);
+    expect(useUiStore.getState().selectedTaskIds).toEqual([]);
+    fireEvent.keyDown(window, { key: 'M', shiftKey: true });
+    expect(useUiStore.getState().moveOpen).toBe(false);
+  });
+});

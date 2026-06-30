@@ -53,15 +53,36 @@ describe('useUiStore', () => {
     expect(ui().selectorOpen).toBe(false);
   });
 
-  it('resetModals exits selection mode and clears the selection', () => {
+  it('openMove stores the target ids and opens the move dialog', () => {
+    const ui = () => useUiStore.getState();
+    ui().openMove(['t1', 't2']);
+    expect(ui().moveOpen).toBe(true);
+    expect(ui().moveTaskIds).toEqual(['t1', 't2']);
+    ui().setMoveOpen(false);
+    expect(ui().moveOpen).toBe(false);
+  });
+
+  it('openBulkDelete snapshots the ids and opens the confirm', () => {
+    const ui = () => useUiStore.getState();
+    ui().openBulkDelete(['t1', 't2']);
+    expect(ui().bulkDeleteOpen).toBe(true);
+    expect(ui().bulkDeleteIds).toEqual(['t1', 't2']);
+  });
+
+  it('resetModals exits selection mode and clears all selection/move/delete flags', () => {
     const ui = () => useUiStore.getState();
     ui().enterSelectionMode();
     ui().setSelectedTasks(['t1', 't2']);
     ui().setSelectorOpen(true);
+    ui().openMove(['t1']);
+    ui().setBulkDeleteOpen(true);
     ui().resetModals();
     expect(ui().selectionMode).toBe(false);
     expect(ui().selectedTaskIds).toEqual([]);
     expect(ui().selectorOpen).toBe(false);
+    expect(ui().moveOpen).toBe(false);
+    expect(ui().moveTaskIds).toEqual([]);
+    expect(ui().bulkDeleteOpen).toBe(false);
   });
 
   it('toggles the home "show archived" flag', () => {

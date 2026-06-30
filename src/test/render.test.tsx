@@ -329,6 +329,45 @@ describe('TaskDialog (read-only view → edit + discussion)', () => {
   });
 });
 
+describe('Selection mode', () => {
+  it('clicking a TODO row toggles its selection; per-task controls are suppressed', async () => {
+    const user = userEvent.setup();
+    const id = useAppStore.getState().createBoard('todo');
+    const t = useAppStore.getState().addTask(id, { title: 'Pick me' });
+    useUiStore.getState().enterSelectionMode();
+    render(<TodoView boardId={id} />);
+
+    // The whole row becomes the click target; the open/archive/complete controls go away.
+    expect(screen.queryByRole('button', { name: 'Open task' })).toBeNull();
+    expect(
+      screen.queryByRole('checkbox', { name: /toggle complete/i }),
+    ).toBeNull();
+
+    const row = screen.getByRole('button', { name: /Pick me/ });
+    await user.click(row);
+    expect(useUiStore.getState().selectedTaskIds).toContain(t);
+
+    // Clicking again toggles it back off.
+    await user.click(row);
+    expect(useUiStore.getState().selectedTaskIds).not.toContain(t);
+  });
+
+  it('clicking a Kanban card toggles its selection; the open button is suppressed', async () => {
+    const user = userEvent.setup();
+    const id = useAppStore.getState().createBoard('kanban');
+    const col0 = useAppStore.getState().boards[id].columns[0].id;
+    const t = useAppStore.getState().addTask(id, { title: 'Card X', columnId: col0 });
+    useUiStore.getState().enterSelectionMode();
+    render(<KanbanView boardId={id} />);
+
+    expect(screen.queryByRole('button', { name: 'Open card' })).toBeNull();
+
+    const card = screen.getByRole('button', { name: /Card X/ });
+    await user.click(card);
+    expect(useUiStore.getState().selectedTaskIds).toContain(t);
+  });
+});
+
 describe('Home search', () => {
   it('type:task jumps to the matching task on its board', async () => {
     const user = userEvent.setup();

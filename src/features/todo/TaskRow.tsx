@@ -31,6 +31,9 @@ export interface TaskRowProps {
 }
 
 export function TaskRow({ task, onEdit }: TaskRowProps) {
+  const selectionMode = useSelectionMode();
+  const taskSelected = useIsTaskSelected(task.id);
+  const toggleTaskSelected = useUiStore((s) => s.toggleTaskSelected);
   const {
     attributes,
     listeners,
@@ -38,12 +41,9 @@ export function TaskRow({ task, onEdit }: TaskRowProps) {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: task.id });
+  } = useSortable({ id: task.id, disabled: selectionMode });
   const toggleComplete = useAppStore((s) => s.toggleComplete);
   const archiveTask = useAppStore((s) => s.archiveTask);
-  const selectionMode = useSelectionMode();
-  const taskSelected = useIsTaskSelected(task.id);
-  const toggleTaskSelected = useUiStore((s) => s.toggleTaskSelected);
   const selected = useIsSelected(task.id);
   const moveTarget = useIsMoveTarget(task.id);
   const noteCount = task.notes?.length ?? 0;
@@ -77,47 +77,70 @@ export function TaskRow({ task, onEdit }: TaskRowProps) {
         moveTarget &&
           'ring-2 ring-primary ring-offset-2 ring-offset-background shadow-lg',
         taskSelected && 'bg-accent/40',
+        selectionMode && 'cursor-pointer select-none',
       )}
+      {...(selectionMode
+        ? {
+            onClick: () => toggleTaskSelected(task.id),
+            role: 'button',
+            'aria-pressed': taskSelected,
+          }
+        : {})}
     >
       {selectionMode && (
+        // Display-only — the whole row is the click target in selection mode.
         <Checkbox
           checked={taskSelected}
-          onCheckedChange={() => toggleTaskSelected(task.id)}
-          className="mt-1"
-          aria-label="Select task"
+          className="pointer-events-none mt-1"
+          aria-hidden
         />
       )}
 
-      <button
-        type="button"
-        className="mt-1 cursor-grab touch-none text-muted-foreground/60 hover:text-muted-foreground"
-        aria-label="Drag to reorder"
-        {...attributes}
-        {...listeners}
-      >
-        <GripVertical className="size-4" />
-      </button>
+      {!selectionMode && (
+        <button
+          type="button"
+          className="mt-1 cursor-grab touch-none text-muted-foreground/60 hover:text-muted-foreground"
+          aria-label="Drag to reorder"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="size-4" />
+        </button>
+      )}
 
-      <Checkbox
-        checked={task.completed}
-        onCheckedChange={() => toggleComplete(task.id)}
-        className="mt-1"
-        aria-label="Toggle complete"
-      />
+      {!selectionMode && (
+        <Checkbox
+          checked={task.completed}
+          onCheckedChange={() => toggleComplete(task.id)}
+          className="mt-1"
+          aria-label="Toggle complete"
+        />
+      )}
 
       <div className="min-w-0 flex-1">
         {/* Title + labels + actions share one line so each task stays compact. */}
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onEdit}
-            className={cn(
-              'min-w-0 flex-1 truncate text-left text-sm font-medium hover:underline',
-              task.completed && 'text-muted-foreground line-through',
-            )}
-          >
-            {task.title || 'Untitled task'}
-          </button>
+          {selectionMode ? (
+            <p
+              className={cn(
+                'min-w-0 flex-1 truncate text-sm font-medium',
+                task.completed && 'text-muted-foreground line-through',
+              )}
+            >
+              {task.title || 'Untitled task'}
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={onEdit}
+              className={cn(
+                'min-w-0 flex-1 truncate text-left text-sm font-medium hover:underline',
+                task.completed && 'text-muted-foreground line-through',
+              )}
+            >
+              {task.title || 'Untitled task'}
+            </button>
+          )}
 
           {task.tags.length > 0 && (
             <div className="hidden shrink-0 items-center gap-1 sm:flex">
@@ -153,7 +176,9 @@ export function TaskRow({ task, onEdit }: TaskRowProps) {
           )}
 
           {/* Dynamic actions: revealed on hover / keyboard focus to save space.
-              Also revealed when the keyboard cursor selects this row. */}
+              Also revealed when the keyboard cursor selects this row. Hidden in
+              selection mode (the whole row is the select target). */}
+          {!selectionMode && (
           <div
             className={cn(
               'flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100',
@@ -191,10 +216,17 @@ export function TaskRow({ task, onEdit }: TaskRowProps) {
               <Archive className="size-4" />
             </Button>
           </div>
+          )}
         </div>
 
         {task.description ? (
-          <div className="mt-0.5 text-sm break-words text-muted-foreground">
+          <div
+            className={cn(
+              'mt-0.5 text-sm break-words text-muted-foreground',
+              // Keep links/code inert so a click selects the row.
+              selectionMode && 'pointer-events-none',
+            )}
+          >
             <Markdown text={task.description} />
           </div>
         ) : null}

@@ -152,6 +152,26 @@ function doneColumnId(b: Board): ColumnId | null {
   );
 }
 
+/**
+ * Where a task lands on a Kanban `target` when no explicit column is chosen
+ * ("keep status"): a same-titled column when the source is also Kanban (so the
+ * exact status is preserved), otherwise the Done column for a done task and the
+ * first column for everything else.
+ */
+function landingColumnId(
+  src: Board | undefined,
+  target: Board,
+  tk: Task,
+): ColumnId | null {
+  const firstCol = target.columns[0]?.id ?? null;
+  if (src && src.type === 'kanban' && tk.columnId) {
+    const srcCol = src.columns.find((c) => c.id === tk.columnId);
+    const match = srcCol && target.columns.find((c) => c.title === srcCol.title);
+    if (match) return match.id;
+  }
+  return taskWasDone(src, tk) ? doneColumnId(target) : firstCol;
+}
+
 export const useAppStore = create<AppState>()(
   persist(
     immer<AppState>((set, get) => ({
@@ -389,16 +409,14 @@ export const useAppStore = create<AppState>()(
           const target = s.boards[targetBoardId];
           if (!target) return;
           const t = now();
-          // An explicit, valid column wins (the Move dialog's picker). Otherwise a
-          // "done" card lands in the Done column, the rest in the first column.
+          // An explicit, valid column wins (the Move dialog's picker). Otherwise
+          // the task keeps its status: a same-titled column / Done / first.
           const explicitCol: ColumnId | null =
             target.type === 'kanban' &&
             columnId &&
             target.columns.some((c) => c.id === columnId)
               ? columnId
               : null;
-          const firstCol = target.columns[0]?.id ?? null;
-          const doneCol = doneColumnId(target);
           const touchedSources = new Set<string>();
           for (const id of taskIds) {
             const tk = s.tasks[id];
@@ -411,7 +429,7 @@ export const useAppStore = create<AppState>()(
             }
             tk.boardId = targetBoardId as BoardId;
             if (target.type === 'kanban') {
-              tk.columnId = explicitCol ?? (wasDone ? doneCol : firstCol);
+              tk.columnId = explicitCol ?? landingColumnId(src, target, tk);
               tk.completed = false; // kanban tracks done via the column
             } else {
               tk.columnId = null;
@@ -529,26 +547,15 @@ export const useAppStore = create<AppState>()(
           const target = s.boards[targetId];
           if (!src || !target || sourceId === targetId) return;
           const t = now();
-          const firstCol = target.columns[0]?.id ?? null;
-          const doneCol = doneColumnId(target);
           for (const id of src.taskIds) {
             const tk = s.tasks[id];
             if (!tk) continue;
-            const wasDone = taskWasDone(src, tk);
             if (target.type === 'kanban') {
-              // Preserve a kanban→kanban move by matching column titles; else
-              // place by done-status (Done column vs first).
-              let col: ColumnId | null = wasDone ? doneCol : firstCol;
-              if (src.type === 'kanban' && tk.columnId) {
-                const srcCol = src.columns.find((c) => c.id === tk.columnId);
-                const match =
-                  srcCol &&
-                  target.columns.find((c) => c.title === srcCol.title);
-                col = match?.id ?? col;
-              }
-              tk.columnId = col;
+              tk.columnId = landingColumnId(src, target, tk);
               tk.completed = false;
             } else {
+              // Read done-status BEFORE clearing columnId (taskWasDone reads it).
+              const wasDone = taskWasDone(src, tk);
               tk.columnId = null;
               tk.completed = wasDone;
             }

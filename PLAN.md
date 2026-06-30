@@ -67,18 +67,28 @@ column derives from that single array. `archived` is orthogonal to
 Layered on the same normalized model:
 
 - **Selection** is one ephemeral set in `useUiStore` (`selectionMode`,
-  `selectedTaskIds`, `selectorOpen`), cleared by `resetModals` on route change.
-  Three surfaces share it: the searchable `TaskSelectorDialog`, the inline card/row
-  checkbox (`useSelectionMode`/`useIsTaskSelected`), and the `SelectionToolbar`
-  (Move / Archive / Delete). `src/features/selection/`.
+  `selectedTaskIds`, `selectorOpen`; plus the lifted `moveOpen`/`moveTaskIds`/
+  `bulkDeleteOpen`), cleared by `resetModals` on route change. Three surfaces share
+  it: the inline card/row checkbox (`useSelectionMode`/`useIsTaskSelected`; in
+  selection mode the whole card/row is the click target), the `SelectionToolbar`
+  (Move / Archive / Delete), and the searchable `TaskSelectorDialog`. The list
+  menu's **Select tasks** enters selection mode directly; the dialog is the
+  toolbar's **Search** picker. `src/features/selection/`.
+- **Keyboard.** The cursor keeps moving in selection mode; **Enter/Space** toggle
+  the cursored task (always-available), and Vim keys `s`/`x`/`a`/`Shift+D`/`Shift+M`
+  drive mode/item/archive/delete/move. The Move dialog + delete confirm are lifted
+  to `useUiStore` and rendered by the board views, so toolbar and keyboard share one
+  flow (`features/selection/bulkActions.ts`).
 - **Store actions** (`useAppStore`, now a `(set, get)` closure): `archiveTasks`,
   `deleteTasks`, `moveTasksToBoard(ids, targetBoardId, columnId?)`,
   `cloneBoard(id, title?)` (deep copy through `buildExport`→`rekey`),
   `mergeBoardInto(src, dst)`, `convertBoard(id)`.
 - **Done reconciliation.** "Done" is the TODO `completed` flag on a todo board but
-  the `isDone` column on a kanban board. `taskWasDone` / `doneColumnId` let
-  `moveTasksToBoard`, `mergeBoardInto`, and `convertBoard` translate between the
-  two whenever a task changes board type, so done-ness survives the move.
+  the `isDone` column on a kanban board. `taskWasDone` / `doneColumnId` /
+  `landingColumnId` let `moveTasksToBoard`, `mergeBoardInto`, and `convertBoard`
+  translate between the two whenever a task changes board type, so done-ness
+  survives the move. The Move dialog's **"Current (keep status)"** default
+  (`columnId: undefined`) keeps each task's column (same title, else Done/first).
 - **List-item actions** (`useBoardListActions`, `src/features/boardActions/`):
   Clone, Merge into… (type `merge list`), Convert to todo/kanban (type
   `convert list`). The hook returns the dropdown `items` and the backing `dialogs`
@@ -98,9 +108,14 @@ Vim-style control layered on without disturbing the domain model:
   to its own `todokan:vim-enabled` localStorage key — not the domain blob).
   Toggled from the bottom-left command line (`src/components/CommandLine.tsx`):
   `:` opens it, `q`+Enter runs `:q`. `handleKey` is split into an
-  **always-available** block (arrows, Enter, Esc, ⌘K/Ctrl+K, `?`, `:`) and a
-  **Vim-gated** block (j/k/h/l, `m`, `a`, `f` hints, `/`, Shift-combos) behind
+  **always-available** block (arrows, Enter, Esc, ⌘K/Ctrl+K, `?`, `:`, and the
+  selection-mode Enter/Space toggle) and a **Vim-gated** block (j/k/h/l, `m`, `a`,
+  `s`/`x` select, Shift-combos incl. `Shift+M` move, `f` hints, `/`) behind
   `if (!vimEnabled) return`.
+- **Grid-aware Home.** The lists grid navigates in 2D (`selectGrid`): ↑/↓ by a row,
+  ←/→ by a column, with the column count from `homeGridColumns()` (matches the
+  `sm:grid-cols-2 lg:grid-cols-3` breakpoints). Kanban/TODO stay linear per their
+  layout.
 - **Two stores.** `useAppStore` stays the persisted domain model. A second,
   **non-persisted** `src/store/useUiStore.ts` holds ephemeral nav state — the
   selection cursor, move-mode + an order snapshot for revert, the `vimEnabled`

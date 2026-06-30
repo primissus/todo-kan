@@ -176,7 +176,10 @@ src/
   (even empty ones); `selectedId` may then be a column id (header actions like
   `a`/`m`/Shift+D are guarded off). **Shift+N**/**Enter** on a header (and Shift+N
   on any card) opens the create form for the cursor's column via
-  `useUiStore.newColumnId`.
+  `useUiStore.newColumnId`. **The Home lists grid is navigated 2D** — `selectGrid`
+  steps ↑/↓ (`j`/`k`) by a full row and ←/→ (`h`/`l`) by one column, using
+  `homeGridColumns()` (reads `matchMedia` for the `sm:grid-cols-2 lg:grid-cols-3`
+  breakpoints; degenerates to linear at 1 column on mobile).
 - **Task dialog & scheduling.** Opening a task (Enter / clicking the card / its
   **eye / "view"** open button — the dialog opens read-only first) shows
   `features/TaskDialog.tsx` — a view/edit modal that opens **read-only**
@@ -236,19 +239,36 @@ src/
   highlights it on arrival.
 - **Bulk selection + list transforms.** One ephemeral selection set in
   `useUiStore` (`selectionMode`/`selectedTaskIds`/`selectorOpen`, cleared on route
-  change) backs three surfaces: the searchable `TaskSelectorDialog` (a checkbox +
-  search picker), the inline checkbox on each card/row (gated by
-  `useSelectionMode`/`useIsTaskSelected` in `useSelection.ts`), and the
-  `SelectionToolbar` (Move / Archive / Delete on the checked tasks). Esc exits
+  change) backs three surfaces: the inline checkbox on each card/row (gated by
+  `useSelectionMode`/`useIsTaskSelected` in `useSelection.ts`), the
+  `SelectionToolbar` (Move / Archive / Delete on the checked tasks), and the
+  searchable `TaskSelectorDialog` (a checkbox + search picker). The list menu's
+  **Select tasks** entry calls `enterSelectionMode()` directly; the dialog is
+  opened only from the toolbar's **Search** button (`selectorOpen`). While
+  selection mode is on the **whole `KanbanCard`/`TaskRow` is the click target** that
+  toggles its selection: drag is `disabled` in `useSortable`, the per-task buttons /
+  complete checkbox are hidden, and the description is `pointer-events-none` — so a
+  click can't accidentally open/drag the task or follow an in-card link. Esc exits
   selection mode (first branch of the keymap's Esc back-out — selection mode is
-  NOT a dialog, so the keymap still runs). The store gained the bulk/board actions
+  NOT a dialog, so the keymap still runs). **Keyboard:** the cursor still moves in
+  selection mode and **Enter/Space** toggle the cursored task (both always-available
+  — no Vim needed); the Vim keys `s` (toggle mode), `x` (toggle item), `a`/`Shift+D`
+  (the whole selection), `Shift+M` (move the selection, or a single cursored task)
+  drive it. The bulk **Move dialog + delete confirm are lifted to `useUiStore`**
+  (`moveOpen`/`moveTaskIds`/`bulkDeleteOpen`/`bulkDeleteIds`) and rendered by the board views, so
+  the toolbar buttons and the keyboard shortcuts run the SAME flows — orchestrated
+  by `features/selection/bulkActions.ts` (`archiveSelection`/`requestMove`/
+  `requestDeleteSelection`/`deleteSelection`/`completeMove`/`finishSelection`).
+  The store gained the bulk/board actions
   `archiveTasks`, `deleteTasks`, `moveTasksToBoard`, `cloneBoard` (copy via
   `buildExport`→`rekey`), `mergeBoardInto`, `convertBoard` (the store closure is
   now `(set, get)` so `cloneBoard` can read state). **Done is represented two
   ways** — the TODO `completed` flag vs. the Kanban `isDone` column — so any action
   that re-homes a task across board types (`moveTasksToBoard`, `mergeBoardInto`,
-  `convertBoard`) reconciles them via the `taskWasDone`/`doneColumnId` helpers (a
-  finished card must not silently become active, and vice-versa). The list-item
+  `convertBoard`) reconciles them via `taskWasDone`/`doneColumnId`/`landingColumnId`
+  (read done-status BEFORE clearing `columnId`; the Move dialog's **"Current (keep
+  status)"** default passes `columnId: undefined` so the store keeps each task's
+  status — a same-titled column, else Done/first). The list-item
   actions (Clone / Merge into… / Convert) are wired once in `useBoardListActions`,
   reused by the Home `BoardCard` menu and both board headers; it returns the menu
   `items` and the backing `dialogs` **separately** because a `Dialog` rendered

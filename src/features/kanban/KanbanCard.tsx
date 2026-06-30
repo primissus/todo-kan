@@ -25,6 +25,9 @@ export interface KanbanCardProps {
 }
 
 export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
+  const selectionMode = useSelectionMode();
+  const taskSelected = useIsTaskSelected(task.id);
+  const toggleTaskSelected = useUiStore((s) => s.toggleTaskSelected);
   const {
     attributes,
     listeners,
@@ -35,11 +38,10 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
   } = useSortable({
     id: task.id,
     data: { type: 'card', columnId: task.columnId },
+    // In selection mode the whole card is a select target — no dragging.
+    disabled: selectionMode,
   });
   const archiveTask = useAppStore((s) => s.archiveTask);
-  const selectionMode = useSelectionMode();
-  const taskSelected = useIsTaskSelected(task.id);
-  const toggleTaskSelected = useUiStore((s) => s.toggleTaskSelected);
   const selected = useIsSelected(task.id);
   const moveTarget = useIsMoveTarget(task.id);
   const noteCount = task.notes?.length ?? 0;
@@ -67,7 +69,8 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
       style={style}
       className={cn(
         'group/card scroll-mt-20 rounded-md border bg-card p-2.5 text-card-foreground shadow-xs',
-        !overlay && 'cursor-grab active:cursor-grabbing',
+        !overlay && !selectionMode && 'cursor-grab active:cursor-grabbing',
+        !overlay && selectionMode && 'cursor-pointer select-none',
         isDragging && 'opacity-40',
         overlay && 'rotate-1 cursor-grabbing shadow-lg',
         selected &&
@@ -76,22 +79,28 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
           'ring-2 ring-primary ring-offset-2 ring-offset-background shadow-lg',
         taskSelected && 'bg-accent/40',
       )}
-      {...(overlay ? {} : attributes)}
-      {...(overlay ? {} : listeners)}
+      {...(overlay || selectionMode ? {} : attributes)}
+      {...(overlay || selectionMode ? {} : listeners)}
+      {...(!overlay && selectionMode
+        ? {
+            onClick: () => toggleTaskSelected(task.id),
+            role: 'button',
+            'aria-pressed': taskSelected,
+          }
+        : {})}
     >
       <div className="flex items-start gap-2">
         {!overlay && selectionMode && (
+          // Display-only — the whole card is the click target in selection mode.
           <Checkbox
             checked={taskSelected}
-            onCheckedChange={() => toggleTaskSelected(task.id)}
-            className="mt-0.5"
-            aria-label="Select card"
-            {...stopDrag}
+            className="pointer-events-none mt-0.5"
+            aria-hidden
           />
         )}
-        {overlay ? (
+        {overlay || selectionMode ? (
           <p className="min-w-0 flex-1 text-sm font-medium break-words">
-            {task.title}
+            {task.title || (overlay ? '' : 'Untitled task')}
           </p>
         ) : (
           <button
@@ -102,7 +111,7 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
             {task.title || 'Untitled task'}
           </button>
         )}
-        {!overlay && (
+        {!overlay && !selectionMode && (
           <div
             className={cn(
               'flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover/card:opacity-100',
@@ -148,7 +157,13 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
       </div>
 
       {task.description ? (
-        <div className="mt-1 text-xs break-words text-muted-foreground">
+        <div
+          className={cn(
+            'mt-1 text-xs break-words text-muted-foreground',
+            // Keep links/code inert so a click selects the card.
+            selectionMode && 'pointer-events-none',
+          )}
+        >
           <Markdown text={task.description} />
         </div>
       ) : null}
@@ -192,16 +207,23 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
 
       {noteCount > 0 && (
         <div className="mt-2">
-          <button
-            type="button"
-            aria-label={`Notes (${noteCount})`}
-            className="inline-flex items-center gap-1 rounded text-xs text-muted-foreground hover:text-foreground"
-            {...(overlay ? {} : stopDrag)}
-            onClick={overlay ? undefined : onEdit}
-          >
-            <MessageSquare className="size-3.5" />
-            <span className="tabular-nums">{noteCount}</span>
-          </button>
+          {overlay || selectionMode ? (
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <MessageSquare className="size-3.5" />
+              <span className="tabular-nums">{noteCount}</span>
+            </span>
+          ) : (
+            <button
+              type="button"
+              aria-label={`Notes (${noteCount})`}
+              className="inline-flex items-center gap-1 rounded text-xs text-muted-foreground hover:text-foreground"
+              {...stopDrag}
+              onClick={onEdit}
+            >
+              <MessageSquare className="size-3.5" />
+              <span className="tabular-nums">{noteCount}</span>
+            </button>
+          )}
         </div>
       )}
     </div>

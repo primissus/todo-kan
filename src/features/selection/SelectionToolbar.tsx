@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { toast } from 'sonner';
 import { Archive, FolderInput, Search, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { ConfirmModal } from '@/components/ConfirmModal';
-import { MoveToListDialog } from '@/features/selection/MoveToListDialog';
-import { useAppStore } from '@/store/useAppStore';
+import {
+  archiveSelection,
+  finishSelection,
+  requestDeleteSelection,
+  requestMove,
+} from '@/features/selection/bulkActions';
 import { useUiStore } from '@/store/useUiStore';
 import { useBoard, useBoardTasks } from '@/store/selectors';
 
@@ -15,7 +16,9 @@ export interface SelectionToolbarProps {
 /**
  * Bulk-action bar shown while selection mode is on (req: selection mode enables
  * Move / Archive / Delete on the checked tasks). Rendered by the board views just
- * under the header; reads the shared selection from useUiStore.
+ * under the header; reads the shared selection from useUiStore. The Move/Delete
+ * dialogs are lifted to the view (see useUiStore.moveOpen/bulkDeleteOpen) so the
+ * keyboard shortcuts (⇧M / ⇧D) drive the exact same flows.
  */
 export function SelectionToolbar({ boardId }: SelectionToolbarProps) {
   const board = useBoard(boardId);
@@ -23,13 +26,10 @@ export function SelectionToolbar({ boardId }: SelectionToolbarProps) {
   const selectedTaskIds = useUiStore((s) => s.selectedTaskIds);
   const setSelectedTasks = useUiStore((s) => s.setSelectedTasks);
   const setSelectorOpen = useUiStore((s) => s.setSelectorOpen);
-  const exitSelectionMode = useUiStore((s) => s.exitSelectionMode);
-  const setSelected = useUiStore((s) => s.setSelected);
-  const archiveTasks = useAppStore((s) => s.archiveTasks);
-  const deleteTasks = useAppStore((s) => s.deleteTasks);
-
-  const [moveOpen, setMoveOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+  // The Move/Archive/Delete shortcuts are Vim-gated — only hint them when on.
+  const vimEnabled = useUiStore((s) => s.vimEnabled);
+  const hint = (label: string, key: string) =>
+    vimEnabled ? `${label} (${key})` : label;
 
   // "Select all" targets only the tasks the user can actually see/check inline:
   // non-archived, and (for a TODO list with "Hide completed") not completed.
@@ -42,7 +42,6 @@ export function SelectionToolbar({ boardId }: SelectionToolbarProps) {
   const selectedSet = new Set(selectedTaskIds);
   const allVisibleSelected =
     activeIds.length > 0 && activeIds.every((id) => selectedSet.has(id));
-  const plural = count === 1 ? '' : 's';
 
   // Toggle the visible set without disturbing any out-of-view tasks the picker
   // dialog may have selected (union to add, set-difference to remove).
@@ -55,31 +54,9 @@ export function SelectionToolbar({ boardId }: SelectionToolbarProps) {
     }
   };
 
-  // After a bulk action the selection is consumed: leave selection mode and drop
-  // the cursor (some selected tasks may no longer exist / be visible).
-  const finish = () => {
-    exitSelectionMode();
-    setSelected(null);
-  };
-
-  const onArchive = () => {
-    if (count === 0) return;
-    archiveTasks(selectedTaskIds);
-    toast.success(`Archived ${count} task${plural}`);
-    finish();
-  };
-
-  const onDelete = () => {
-    deleteTasks(selectedTaskIds);
-    toast.success(`Deleted ${count} task${plural}`);
-    finish();
-  };
-
   return (
     <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border bg-card px-3 py-2 shadow-xs">
-      <span className="text-sm font-medium tabular-nums">
-        {count} selected
-      </span>
+      <span className="text-sm font-medium tabular-nums">{count} selected</span>
 
       <Button
         variant="ghost"
@@ -100,7 +77,8 @@ export function SelectionToolbar({ boardId }: SelectionToolbarProps) {
         variant="outline"
         size="sm"
         disabled={count === 0}
-        onClick={() => setMoveOpen(true)}
+        title={hint('Move', '⇧M')}
+        onClick={() => requestMove(selectedTaskIds)}
       >
         <FolderInput className="size-4" />
         Move
@@ -109,7 +87,8 @@ export function SelectionToolbar({ boardId }: SelectionToolbarProps) {
         variant="outline"
         size="sm"
         disabled={count === 0}
-        onClick={onArchive}
+        title={hint('Archive', 'a')}
+        onClick={archiveSelection}
       >
         <Archive className="size-4" />
         Archive
@@ -118,7 +97,8 @@ export function SelectionToolbar({ boardId }: SelectionToolbarProps) {
         variant="outline"
         size="sm"
         disabled={count === 0}
-        onClick={() => setDeleteOpen(true)}
+        title={hint('Delete', '⇧D')}
+        onClick={requestDeleteSelection}
         className="text-destructive hover:text-destructive"
       >
         <Trash2 className="size-4" />
@@ -127,31 +107,10 @@ export function SelectionToolbar({ boardId }: SelectionToolbarProps) {
 
       <div className="flex-1" />
 
-      <Button variant="ghost" size="sm" onClick={finish}>
+      <Button variant="ghost" size="sm" title="Done (Esc)" onClick={finishSelection}>
         <X className="size-4" />
         Done
       </Button>
-
-      <MoveToListDialog
-        taskIds={selectedTaskIds}
-        sourceBoardId={boardId}
-        open={moveOpen}
-        onOpenChange={setMoveOpen}
-        onMoved={(n, title) => {
-          toast.success(`Moved ${n} task${n === 1 ? '' : 's'} to “${title}”`);
-          finish();
-        }}
-      />
-
-      <ConfirmModal
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        title={`Delete ${count} task${plural}?`}
-        description="The selected tasks will be permanently deleted."
-        confirmLabel="Delete"
-        destructive
-        onConfirm={onDelete}
-      />
     </div>
   );
 }
