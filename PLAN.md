@@ -62,6 +62,29 @@ column derives from that single array. `archived` is orthogonal to
   `moveTaskToColumn(taskId, columnId, beforeTaskId|null)` — insert before the
   target card, or at the end of the column when dropping on empty space.
 
+## Bulk selection & list transforms
+
+Layered on the same normalized model:
+
+- **Selection** is one ephemeral set in `useUiStore` (`selectionMode`,
+  `selectedTaskIds`, `selectorOpen`), cleared by `resetModals` on route change.
+  Three surfaces share it: the searchable `TaskSelectorDialog`, the inline card/row
+  checkbox (`useSelectionMode`/`useIsTaskSelected`), and the `SelectionToolbar`
+  (Move / Archive / Delete). `src/features/selection/`.
+- **Store actions** (`useAppStore`, now a `(set, get)` closure): `archiveTasks`,
+  `deleteTasks`, `moveTasksToBoard(ids, targetBoardId, columnId?)`,
+  `cloneBoard(id, title?)` (deep copy through `buildExport`→`rekey`),
+  `mergeBoardInto(src, dst)`, `convertBoard(id)`.
+- **Done reconciliation.** "Done" is the TODO `completed` flag on a todo board but
+  the `isDone` column on a kanban board. `taskWasDone` / `doneColumnId` let
+  `moveTasksToBoard`, `mergeBoardInto`, and `convertBoard` translate between the
+  two whenever a task changes board type, so done-ness survives the move.
+- **List-item actions** (`useBoardListActions`, `src/features/boardActions/`):
+  Clone, Merge into… (type `merge list`), Convert to todo/kanban (type
+  `convert list`). The hook returns the dropdown `items` and the backing `dialogs`
+  separately — a `Dialog` inside a closing `DropdownMenuContent` would unmount, so
+  the dialogs render as a sibling of the menu (the Home `BoardCard` delete pattern).
+
 ## Routing
 
 Tiny hash router (`src/lib/router.ts`): `#/` = home, `#/board/<id>` = board.

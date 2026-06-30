@@ -30,6 +30,40 @@ describe('useUiStore', () => {
     expect(useUiStore.getState().moveSnapshot).toBeNull();
   });
 
+  it('manages the bulk task selection set', () => {
+    const ui = () => useUiStore.getState();
+    ui().enterSelectionMode();
+    expect(ui().selectionMode).toBe(true);
+
+    ui().toggleTaskSelected('t1');
+    ui().toggleTaskSelected('t2');
+    expect(ui().selectedTaskIds).toEqual(['t1', 't2']);
+    ui().toggleTaskSelected('t1'); // toggle off
+    expect(ui().selectedTaskIds).toEqual(['t2']);
+
+    ui().setSelectedTasks(['a', 'b', 'c']);
+    expect(ui().selectedTaskIds).toEqual(['a', 'b', 'c']);
+    ui().clearTaskSelection();
+    expect(ui().selectedTaskIds).toEqual([]);
+
+    ui().setSelectedTasks(['x']);
+    ui().exitSelectionMode();
+    expect(ui().selectionMode).toBe(false);
+    expect(ui().selectedTaskIds).toEqual([]);
+    expect(ui().selectorOpen).toBe(false);
+  });
+
+  it('resetModals exits selection mode and clears the selection', () => {
+    const ui = () => useUiStore.getState();
+    ui().enterSelectionMode();
+    ui().setSelectedTasks(['t1', 't2']);
+    ui().setSelectorOpen(true);
+    ui().resetModals();
+    expect(ui().selectionMode).toBe(false);
+    expect(ui().selectedTaskIds).toEqual([]);
+    expect(ui().selectorOpen).toBe(false);
+  });
+
   it('toggles the home "show archived" flag', () => {
     expect(useUiStore.getState().homeShowArchived).toBe(false);
     useUiStore.getState().toggleHomeShowArchived();

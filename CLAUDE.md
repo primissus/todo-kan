@@ -78,6 +78,25 @@ After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and
   hold picks up the card/row on touch) + `KeyboardSensor`. Kanban order lives in
   `taskIds` (filtered per column); the primitive is
   `moveTaskToColumn(taskId, columnId, beforeTaskId|null)`. "Done" column = `isDone` flag.
+- **Bulk selection + list transforms**: a per-board, **ephemeral** selection set
+  lives in `useUiStore` (`selectionMode`, `selectedTaskIds`, `selectorOpen`;
+  cleared by `resetModals` on route change). Each list's **More** menu → **"Select
+  tasks…"** opens the searchable `TaskSelectorDialog` (`src/features/selection/`);
+  applying it turns on **selection mode**, which shows a checkbox on every
+  card/row (`useSelectionMode`/`useIsTaskSelected` in `useSelection.ts`) and a
+  **`SelectionToolbar`** (Select all · Search · **Move · Archive · Delete** ·
+  Done). Esc exits selection mode (handled first in the keymap's Esc back-out).
+  **Move** (`MoveToListDialog`) re-homes the selection onto another board via
+  `moveTasksToBoard`. **List-item actions** come from the shared
+  `useBoardListActions` hook (`src/features/boardActions/`, rendered on the Home
+  `BoardCard` menu AND both board headers): **Clone** (`cloneBoard` — copy via the
+  export→rekey path), **Merge into…** (`mergeBoardInto`, type-confirm `merge
+  list`), **Convert to todo/kanban** (`convertBoard`, type-confirm `convert
+  list`). Crossing board types, move/merge/convert all reconcile the two "done"
+  representations — TODO `completed` ⇄ Kanban `isDone` column — via the
+  `taskWasDone`/`doneColumnId` helpers. **Dialogs opened from a dropdown render
+  OUTSIDE the menu** (a `Dialog` inside a closing `DropdownMenuContent` unmounts);
+  `useBoardListActions` returns its menu `items` and `dialogs` separately for this.
 - **Task view dialog** (`src/features/TaskDialog.tsx`): the unified view/edit modal
   opened via `useUiStore.editId` (Enter / clicking a card or its open button — an
   **eye / "view"** icon on the card/row, since the dialog opens read-only first). It

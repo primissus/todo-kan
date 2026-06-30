@@ -3,11 +3,18 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Archive, Bell, CalendarClock, Eye, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Markdown } from '@/components/Markdown';
 import { cn } from '@/lib/utils';
 import { formatDateTime } from '@/lib/datetime';
 import { useAppStore } from '@/store/useAppStore';
-import { useIsMoveTarget, useIsSelected } from '@/hooks/useSelection';
+import { useUiStore } from '@/store/useUiStore';
+import {
+  useIsMoveTarget,
+  useIsSelected,
+  useIsTaskSelected,
+  useSelectionMode,
+} from '@/hooks/useSelection';
 import type { Task } from '@/lib/types/domain';
 
 export interface KanbanCardProps {
@@ -30,6 +37,9 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
     data: { type: 'card', columnId: task.columnId },
   });
   const archiveTask = useAppStore((s) => s.archiveTask);
+  const selectionMode = useSelectionMode();
+  const taskSelected = useIsTaskSelected(task.id);
+  const toggleTaskSelected = useUiStore((s) => s.toggleTaskSelected);
   const selected = useIsSelected(task.id);
   const moveTarget = useIsMoveTarget(task.id);
   const noteCount = task.notes?.length ?? 0;
@@ -64,11 +74,21 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
           'ring-2 ring-ring ring-offset-2 ring-offset-background',
         moveTarget &&
           'ring-2 ring-primary ring-offset-2 ring-offset-background shadow-lg',
+        taskSelected && 'bg-accent/40',
       )}
       {...(overlay ? {} : attributes)}
       {...(overlay ? {} : listeners)}
     >
       <div className="flex items-start gap-2">
+        {!overlay && selectionMode && (
+          <Checkbox
+            checked={taskSelected}
+            onCheckedChange={() => toggleTaskSelected(task.id)}
+            className="mt-0.5"
+            aria-label="Select card"
+            {...stopDrag}
+          />
+        )}
         {overlay ? (
           <p className="min-w-0 flex-1 text-sm font-medium break-words">
             {task.title}

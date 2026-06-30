@@ -468,8 +468,12 @@ function handleKey(e: KeyboardEvent, route: Route): void {
     return;
   }
   if (key === 'Escape') {
-    // Escalating back-out: clear the cursor first, then leave the board for Home.
-    if (ui.selectedId) {
+    // Escalating back-out: leave bulk-selection mode first, then clear the
+    // cursor, then leave the board for Home.
+    if (ui.selectionMode) {
+      e.preventDefault();
+      ui.exitSelectionMode();
+    } else if (ui.selectedId) {
       e.preventDefault();
       ui.setSelected(null);
     } else if (route.name === 'board') {

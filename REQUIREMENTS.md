@@ -85,6 +85,32 @@ Vim-style keyboard control, added after the initial spec and made **opt-in**.
     (Vim-only rows appear only when Vim keys are on); a header button opens it too.
 13. Shortcuts are ignored while typing in a field or while a dialog is open.
 
+### Bulk operations & list transforms (13)
+
+Added after the initial spec. Operate on a board's tasks (1, 2, 6) or on a whole
+list/board (3, 4, 5).
+
+1. **Task selector** — a dialog with a **search bar** and a checkbox list to
+   select **multiple or all** of a list's tasks (the "More → Select tasks…"
+   entry). Applying it enters selection mode.
+2. **Move to another list** — move the selected task(s) onto a **different** list
+   or board (TODO **or** Kanban). When the destination is Kanban you pick the
+   landing **column**.
+3. **Clone list** — a list-item action that copies a whole list/board and all its
+   tasks; a modal asks for the copy's **title**.
+4. **Merge into** — a list-item action that moves every task of the list into
+   another list and **deletes the source**. Guarded by typing **`merge list`**.
+5. **Convert** — flip a list between its two types (**`todo ⇄ kanban`**). Guarded
+   by typing **`convert list`**.
+6. **Selection mode** — shows a selection **checkbox** on every task and a toolbar
+   that enables **Move**, **Archive**, and **Delete** on the checked tasks; **Esc**
+   leaves selection mode.
+
+Interpretation: "done" has two representations (the TODO `completed` flag vs. the
+Kanban `isDone` column), so move/merge/convert **translate between them** when a
+task crosses board types — a card in *Done* becomes a completed TODO and vice
+versa, rather than silently losing its status.
+
 ## Locked stack decisions
 
 - **Vite + React + TypeScript + pnpm.**

@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { useBoardListActions } from '@/features/boardActions/useBoardListActions';
 import { goBoard } from '@/lib/router';
 import { useAppStore } from '@/store/useAppStore';
 import { useBoardTasks } from '@/store/selectors';
@@ -34,6 +35,7 @@ export function BoardCard({ board, archived = false }: BoardCardProps) {
   const unarchiveBoard = useAppStore((s) => s.unarchiveBoard);
   const deleteBoard = useAppStore((s) => s.deleteBoard);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const listActions = useBoardListActions(board);
   const selected = useIsSelected(board.id);
   const moveTarget = useIsMoveTarget(board.id);
 
@@ -110,6 +112,12 @@ export function BoardCard({ board, archived = false }: BoardCardProps) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {!archived && (
+              <>
+                {listActions.items}
+                <DropdownMenuSeparator />
+              </>
+            )}
             {archived ? (
               <DropdownMenuItem onClick={() => unarchiveBoard(board.id)}>
                 <ArchiveRestore className="size-4" />
@@ -142,6 +150,8 @@ export function BoardCard({ board, archived = false }: BoardCardProps) {
         destructive
         onConfirm={() => deleteBoard(board.id)}
       />
+
+      {!archived && listActions.dialogs}
     </div>
   );
 }

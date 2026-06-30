@@ -91,6 +91,20 @@ export interface UiState {
   setArchivedOpen: (v: boolean) => void;
   kanbanColumnsOpen: boolean;
   setKanbanColumnsOpen: (v: boolean) => void;
+
+  /** Bulk task selection (board-scoped, ephemeral). When `selectionMode` is on,
+   *  cards/rows show a checkbox and a SelectionToolbar exposes Move/Archive/Delete.
+   *  `selectorOpen` is the searchable "Select tasks…" picker dialog. */
+  selectionMode: boolean;
+  selectedTaskIds: string[];
+  selectorOpen: boolean;
+  enterSelectionMode: () => void;
+  exitSelectionMode: () => void;
+  toggleTaskSelected: (id: string) => void;
+  setSelectedTasks: (ids: string[]) => void;
+  clearTaskSelection: () => void;
+  setSelectorOpen: (v: boolean) => void;
+
   /** Close every lifted modal at once (e.g. on route change). */
   resetModals: () => void;
   homeShowArchived: boolean;
@@ -118,6 +132,9 @@ export const initialUiState = {
   deleteId: null,
   archivedOpen: false,
   kanbanColumnsOpen: false,
+  selectionMode: false,
+  selectedTaskIds: [] as string[],
+  selectorOpen: false,
   homeShowArchived: false,
   homeQuery: '',
 } as const;
@@ -157,6 +174,20 @@ export const useUiStore = create<UiState>((set) => ({
   setDeleteId: (id) => set({ deleteId: id }),
   setArchivedOpen: (v) => set({ archivedOpen: v }),
   setKanbanColumnsOpen: (v) => set({ kanbanColumnsOpen: v }),
+
+  enterSelectionMode: () => set({ selectionMode: true }),
+  exitSelectionMode: () =>
+    set({ selectionMode: false, selectedTaskIds: [], selectorOpen: false }),
+  toggleTaskSelected: (id) =>
+    set((s) => ({
+      selectedTaskIds: s.selectedTaskIds.includes(id)
+        ? s.selectedTaskIds.filter((x) => x !== id)
+        : [...s.selectedTaskIds, id],
+    })),
+  setSelectedTasks: (ids) => set({ selectedTaskIds: ids }),
+  clearTaskSelection: () => set({ selectedTaskIds: [] }),
+  setSelectorOpen: (v) => set({ selectorOpen: v }),
+
   resetModals: () =>
     set({
       newOpen: false,
@@ -165,6 +196,9 @@ export const useUiStore = create<UiState>((set) => ({
       deleteId: null,
       archivedOpen: false,
       kanbanColumnsOpen: false,
+      selectionMode: false,
+      selectedTaskIds: [],
+      selectorOpen: false,
       cmdline: null,
     }),
   setHomeShowArchived: (v) => set({ homeShowArchived: v }),

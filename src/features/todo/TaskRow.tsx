@@ -15,7 +15,13 @@ import { Markdown } from '@/components/Markdown';
 import { cn } from '@/lib/utils';
 import { formatDateTime } from '@/lib/datetime';
 import { useAppStore } from '@/store/useAppStore';
-import { useIsMoveTarget, useIsSelected } from '@/hooks/useSelection';
+import { useUiStore } from '@/store/useUiStore';
+import {
+  useIsMoveTarget,
+  useIsSelected,
+  useIsTaskSelected,
+  useSelectionMode,
+} from '@/hooks/useSelection';
 import type { Task } from '@/lib/types/domain';
 
 export interface TaskRowProps {
@@ -35,6 +41,9 @@ export function TaskRow({ task, onEdit }: TaskRowProps) {
   } = useSortable({ id: task.id });
   const toggleComplete = useAppStore((s) => s.toggleComplete);
   const archiveTask = useAppStore((s) => s.archiveTask);
+  const selectionMode = useSelectionMode();
+  const taskSelected = useIsTaskSelected(task.id);
+  const toggleTaskSelected = useUiStore((s) => s.toggleTaskSelected);
   const selected = useIsSelected(task.id);
   const moveTarget = useIsMoveTarget(task.id);
   const noteCount = task.notes?.length ?? 0;
@@ -67,8 +76,18 @@ export function TaskRow({ task, onEdit }: TaskRowProps) {
         selected && 'ring-2 ring-ring ring-offset-2 ring-offset-background',
         moveTarget &&
           'ring-2 ring-primary ring-offset-2 ring-offset-background shadow-lg',
+        taskSelected && 'bg-accent/40',
       )}
     >
+      {selectionMode && (
+        <Checkbox
+          checked={taskSelected}
+          onCheckedChange={() => toggleTaskSelected(task.id)}
+          className="mt-1"
+          aria-label="Select task"
+        />
+      )}
+
       <button
         type="button"
         className="mt-1 cursor-grab touch-none text-muted-foreground/60 hover:text-muted-foreground"

@@ -17,6 +17,7 @@ import {
   Archive,
   CheckCheck,
   Eraser,
+  ListChecks,
   MoreVertical,
   Plus,
   Settings2,
@@ -36,6 +37,9 @@ import { TaskFormDialog } from '@/features/TaskFormDialog';
 import { TaskDialog } from '@/features/TaskDialog';
 import { ArchivedTasksDrawer } from '@/features/ArchivedTasksDrawer';
 import { ColumnsSettings } from '@/features/kanban/ColumnsSettings';
+import { SelectionToolbar } from '@/features/selection/SelectionToolbar';
+import { TaskSelectorDialog } from '@/features/selection/TaskSelectorDialog';
+import { useBoardListActions } from '@/features/boardActions/useBoardListActions';
 import { TypeToConfirmModal } from '@/components/TypeToConfirmModal';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { useAppStore } from '@/store/useAppStore';
@@ -80,6 +84,10 @@ export function KanbanView({ boardId }: KanbanViewProps) {
   const setArchivedOpen = useUiStore((s) => s.setArchivedOpen);
   const columnsOpen = useUiStore((s) => s.kanbanColumnsOpen);
   const setColumnsOpen = useUiStore((s) => s.setKanbanColumnsOpen);
+  const selectionMode = useUiStore((s) => s.selectionMode);
+  const selectorOpen = useUiStore((s) => s.selectorOpen);
+  const setSelectorOpen = useUiStore((s) => s.setSelectorOpen);
+  const listActions = useBoardListActions(board);
 
   const [clearOpen, setClearOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -193,6 +201,13 @@ export function KanbanView({ boardId }: KanbanViewProps) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setSelectorOpen(true)}>
+              <ListChecks className="size-4" />
+              Select tasks…
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {listActions.items}
+            <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => setColumnsOpen(true)}>
               <Settings2 className="size-4" />
               Columns
@@ -212,6 +227,7 @@ export function KanbanView({ boardId }: KanbanViewProps) {
           </DropdownMenuContent>
         </DropdownMenu>
         </BoardHeader>
+        {selectionMode && <SelectionToolbar boardId={boardId} />}
       </div>
 
       <DndContext
@@ -326,6 +342,14 @@ export function KanbanView({ boardId }: KanbanViewProps) {
         confirmLabel="Clear board"
         onConfirm={() => clearBoard(boardId)}
       />
+
+      <TaskSelectorDialog
+        boardId={boardId}
+        open={selectorOpen}
+        onOpenChange={setSelectorOpen}
+      />
+
+      {listActions.dialogs}
     </div>
   );
 }

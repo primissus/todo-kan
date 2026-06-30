@@ -15,13 +15,23 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { Archive, Eraser, Eye, EyeOff, Plus } from 'lucide-react';
+import { Archive, Eraser, Eye, EyeOff, ListChecks, MoreVertical, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { BoardHeader } from '@/features/BoardHeader';
 import { TaskRow } from '@/features/todo/TaskRow';
 import { TaskFormDialog } from '@/features/TaskFormDialog';
 import { TaskDialog } from '@/features/TaskDialog';
 import { ArchivedTasksDrawer } from '@/features/ArchivedTasksDrawer';
+import { SelectionToolbar } from '@/features/selection/SelectionToolbar';
+import { TaskSelectorDialog } from '@/features/selection/TaskSelectorDialog';
+import { useBoardListActions } from '@/features/boardActions/useBoardListActions';
 import { TypeToConfirmModal } from '@/components/TypeToConfirmModal';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { useAppStore } from '@/store/useAppStore';
@@ -52,6 +62,10 @@ export function TodoView({ boardId }: TodoViewProps) {
   const setDeleteId = useUiStore((s) => s.setDeleteId);
   const archivedOpen = useUiStore((s) => s.archivedOpen);
   const setArchivedOpen = useUiStore((s) => s.setArchivedOpen);
+  const selectionMode = useUiStore((s) => s.selectionMode);
+  const selectorOpen = useUiStore((s) => s.selectorOpen);
+  const setSelectorOpen = useUiStore((s) => s.setSelectorOpen);
+  const listActions = useBoardListActions(board);
 
   const [clearOpen, setClearOpen] = useState(false);
 
@@ -103,24 +117,36 @@ export function TodoView({ boardId }: TodoViewProps) {
           )}
           {board.showCompleted ? 'Hide completed' : 'Show completed'}
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setArchivedOpen(true)}
-        >
-          <Archive className="size-4" />
-          Archived{archivedCount > 0 ? ` (${archivedCount})` : ''}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground"
-          onClick={() => setClearOpen(true)}
-        >
-          <Eraser className="size-4" />
-          Clear
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="icon-sm" aria-label="More list actions">
+              <MoreVertical className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setSelectorOpen(true)}>
+              <ListChecks className="size-4" />
+              Select tasks…
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {listActions.items}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => setArchivedOpen(true)}>
+              <Archive className="size-4" />
+              Archived{archivedCount > 0 ? ` (${archivedCount})` : ''}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => setClearOpen(true)}
+            >
+              <Eraser className="size-4" />
+              Clear
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </BoardHeader>
+      {selectionMode && <SelectionToolbar boardId={boardId} />}
 
       {visible.length === 0 ? (
         <div className="rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground">
@@ -203,6 +229,14 @@ export function TodoView({ boardId }: TodoViewProps) {
         confirmLabel="Clear list"
         onConfirm={() => clearBoard(boardId)}
       />
+
+      <TaskSelectorDialog
+        boardId={boardId}
+        open={selectorOpen}
+        onOpenChange={setSelectorOpen}
+      />
+
+      {listActions.dialogs}
     </div>
   );
 }

@@ -69,9 +69,11 @@ src/
     BoardHeader.tsx, TaskFormDialog.tsx (create), TaskDialog.tsx (unified view/edit
     + due/reminder + discussion), NoteThread.tsx (the note thread, embedded in TaskDialog),
     ArchivedTasksDrawer.tsx                                        # shared by both views
-    home/    HomePage, BoardCard
-    todo/    TodoView, TaskRow
-    kanban/  KanbanView, Column, KanbanCard, ColumnsSettings
+    home/         HomePage, BoardCard
+    todo/         TodoView, TaskRow
+    kanban/       KanbanView, Column, KanbanCard, ColumnsSettings
+    selection/    TaskSelectorDialog, SelectionToolbar, MoveToListDialog  # bulk select / move / archive / delete
+    boardActions/ useBoardListActions (hook) + CloneListDialog, MergeListDialog, ConvertListDialog  # list-item transforms
   styles/ globals.css, theme.css
   test/   setup.ts, store.test.ts, notes.test.ts, render.test.tsx,
           keymap.test.tsx, keymapTable.test.ts, hints.test.ts,
@@ -126,7 +128,9 @@ src/
   (`moveMode` + an order `moveSnapshot` for Esc-revert), the Vim-keys toggle
   (`vimEnabled`) + command-line buffer (`cmdline`), and overlay/modal flags
   (`paletteOpen`, `helpOpen`, `hintsActive`, `newOpen`, `editId`, `deleteId`,
-  `archivedOpen`, `kanbanColumnsOpen`, `homeShowArchived`, `homeQuery`), plus
+  `archivedOpen`, `kanbanColumnsOpen`, `homeShowArchived`, `homeQuery`), the
+  **bulk-selection slice** (`selectionMode` + `selectedTaskIds` + `selectorOpen`,
+  all cleared by `resetModals`), plus
   `pendingSelectId` (a task to focus AFTER the next route change — set by a Home
   search result that targets a task on another board, consumed by the keymap's
   route-reset effect). `editId` opens the unified `TaskDialog` (view/edit + due/
@@ -218,6 +222,27 @@ src/
   prefix. Results are navigated inline (↑/↓/Enter while the search box is focused);
   picking a task sets `pendingSelectId` then navigates to its board so the view
   highlights it on arrival.
+- **Bulk selection + list transforms.** One ephemeral selection set in
+  `useUiStore` (`selectionMode`/`selectedTaskIds`/`selectorOpen`, cleared on route
+  change) backs three surfaces: the searchable `TaskSelectorDialog` (a checkbox +
+  search picker), the inline checkbox on each card/row (gated by
+  `useSelectionMode`/`useIsTaskSelected` in `useSelection.ts`), and the
+  `SelectionToolbar` (Move / Archive / Delete on the checked tasks). Esc exits
+  selection mode (first branch of the keymap's Esc back-out — selection mode is
+  NOT a dialog, so the keymap still runs). The store gained the bulk/board actions
+  `archiveTasks`, `deleteTasks`, `moveTasksToBoard`, `cloneBoard` (copy via
+  `buildExport`→`rekey`), `mergeBoardInto`, `convertBoard` (the store closure is
+  now `(set, get)` so `cloneBoard` can read state). **Done is represented two
+  ways** — the TODO `completed` flag vs. the Kanban `isDone` column — so any action
+  that re-homes a task across board types (`moveTasksToBoard`, `mergeBoardInto`,
+  `convertBoard`) reconciles them via the `taskWasDone`/`doneColumnId` helpers (a
+  finished card must not silently become active, and vice-versa). The list-item
+  actions (Clone / Merge into… / Convert) are wired once in `useBoardListActions`,
+  reused by the Home `BoardCard` menu and both board headers; it returns the menu
+  `items` and the backing `dialogs` **separately** because a `Dialog` rendered
+  inside a closing `DropdownMenuContent` unmounts — always render such dialogs as
+  a sibling of the menu, controlled by state (the existing `BoardCard` delete
+  pattern).
 
 ## Conventions
 
@@ -287,9 +312,13 @@ src/
   tokenizer; `markdown.test.ts` covers the Markdown parser + `safeHref`, and
   `markdownRender.test.tsx` the renderer (copy button, verbatim code, inert unsafe
   links); `datetime.test.ts` covers the pure date-picker math; `hints.test.ts`
-  + `uiStore.test.ts` cover the pure/ephemeral pieces. `store.test.ts` also covers
-  `type:` query parsing and `dueAt`/`remindAt` edits; `render.test.tsx` covers the
-  unified TaskDialog live-edit and the Home `type:task` jump-to-task flow.
+  + `uiStore.test.ts` cover the pure/ephemeral pieces (incl. the bulk-selection
+  slice + `resetModals` clearing it). `store.test.ts` also covers `type:` query
+  parsing, `dueAt`/`remindAt` edits, and the bulk/board actions
+  (`moveTasksToBoard`, `archiveTasks`/`deleteTasks`, `cloneBoard`,
+  `mergeBoardInto`, `convertBoard`) — including the cross-type done-status
+  reconciliation; `render.test.tsx` covers the unified TaskDialog live-edit and
+  the Home `type:task` jump-to-task flow.
 - After UI/logic changes, run `pnpm typecheck && pnpm lint && pnpm test`, then
   `pnpm build` and `pnpm build:single`. Note `tsc -b` type-checks the test files
   too — a green `vitest` run is not enough on its own. That is the full automated

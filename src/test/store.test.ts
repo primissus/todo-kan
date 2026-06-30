@@ -137,6 +137,210 @@ describe('clear', () => {
   });
 });
 
+describe('bulk task ops', () => {
+  it('archiveTasks archives many at once', () => {
+    const id = s().createBoard('todo');
+    const a = s().addTask(id, { title: 'a' });
+    const b = s().addTask(id, { title: 'b' });
+    const c = s().addTask(id, { title: 'c' });
+    s().archiveTasks([a, c]);
+    expect(task(a).archived).toBe(true);
+    expect(task(b).archived).toBe(false);
+    expect(task(c).archived).toBe(true);
+  });
+
+  it('deleteTasks removes many and detaches them from the board', () => {
+    const id = s().createBoard('todo');
+    const a = s().addTask(id, { title: 'a' });
+    const b = s().addTask(id, { title: 'b' });
+    s().deleteTasks([a]);
+    expect(task(a)).toBeUndefined();
+    expect(board(id).taskIds).toEqual([b]);
+  });
+});
+
+describe('moveTasksToBoard', () => {
+  it('moves todo tasks onto a kanban board, landing in the first column', () => {
+    const src = s().createBoard('todo');
+    const dst = s().createBoard('kanban');
+    const c0 = board(dst).columns[0].id;
+    const a = s().addTask(src, { title: 'a' });
+    const b = s().addTask(src, { title: 'b' });
+
+    s().moveTasksToBoard([a], dst);
+    expect(task(a).boardId).toBe(dst);
+    expect(task(a).columnId).toBe(c0);
+    expect(board(src).taskIds).toEqual([b]);
+    expect(board(dst).taskIds).toEqual([a]);
+  });
+
+  it('honours an explicit target column', () => {
+    const src = s().createBoard('todo');
+    const dst = s().createBoard('kanban');
+    const c1 = board(dst).columns[1].id;
+    const a = s().addTask(src, { title: 'a' });
+    s().moveTasksToBoard([a], dst, c1);
+    expect(task(a).columnId).toBe(c1);
+  });
+
+  it('moving onto a todo board clears the columnId', () => {
+    const src = s().createBoard('kanban');
+    const dst = s().createBoard('todo');
+    const c0 = board(src).columns[0].id;
+    const a = s().addTask(src, { title: 'a', columnId: c0 });
+    s().moveTasksToBoard([a], dst);
+    expect(task(a).boardId).toBe(dst);
+    expect(task(a).columnId).toBeNull();
+  });
+
+  it('is a no-op for tasks already on the target board', () => {
+    const id = s().createBoard('todo');
+    const a = s().addTask(id, { title: 'a' });
+    s().moveTasksToBoard([a], id);
+    expect(board(id).taskIds).toEqual([a]);
+    expect(task(a).boardId).toBe(id);
+  });
+
+  it('carries a Kanban Done card onto a TODO list as completed', () => {
+    const src = s().createBoard('kanban');
+    const dst = s().createBoard('todo');
+    const done = board(src).columns.find((c) => c.isDone)!.id;
+    const a = s().addTask(src, { title: 'a', columnId: done });
+    s().moveTasksToBoard([a], dst);
+    expect(task(a).columnId).toBeNull();
+    expect(task(a).completed).toBe(true);
+  });
+
+  it('sends a completed TODO task to the Done column on Kanban (no explicit column)', () => {
+    const src = s().createBoard('todo');
+    const dst = s().createBoard('kanban');
+    const done = board(dst).columns.find((c) => c.isDone)!.id;
+    const a = s().addTask(src, { title: 'a' });
+    s().toggleComplete(a);
+    s().moveTasksToBoard([a], dst);
+    expect(task(a).columnId).toBe(done);
+    expect(task(a).completed).toBe(false); // normalized for kanban
+  });
+});
+
+describe('cloneBoard', () => {
+  it('deep-copies a board + its tasks with fresh ids, inserted after the source', () => {
+    const id = s().createBoard('kanban');
+    const c0 = board(id).columns[0].id;
+    const t = s().addTask(id, { title: 'a', columnId: c0 });
+
+    const cloneId = s().cloneBoard(id);
+    expect(cloneId).not.toBe(id);
+    expect(board(cloneId).title).toBe(`Copy of ${board(id).title}`);
+    // inserted right after the source
+    const order = s().boardOrder;
+    expect(order[order.indexOf(id) + 1]).toBe(cloneId);
+    // copied task is independent (new id, points at the clone)
+    const copiedIds = board(cloneId).taskIds;
+    expect(copiedIds).toHaveLength(1);
+    expect(copiedIds[0]).not.toBe(t);
+    expect(task(copiedIds[0]).boardId).toBe(cloneId);
+    expect(task(copiedIds[0]).title).toBe('a');
+  });
+
+  it('uses a custom title when given', () => {
+    const id = s().createBoard('todo');
+    const cloneId = s().cloneBoard(id, 'My copy');
+    expect(board(cloneId).title).toBe('My copy');
+  });
+});
+
+describe('mergeBoardInto', () => {
+  it('moves all source tasks into the target and deletes the source', () => {
+    const a = s().createBoard('todo');
+    const b = s().createBoard('todo');
+    const t1 = s().addTask(a, { title: 't1' });
+    const t2 = s().addTask(a, { title: 't2' });
+    const t3 = s().addTask(b, { title: 't3' });
+
+    s().mergeBoardInto(a, b);
+    expect(board(a)).toBeUndefined();
+    expect(s().boardOrder).not.toContain(a);
+    expect(board(b).taskIds).toEqual([t3, t1, t2]);
+    expect(task(t1).boardId).toBe(b);
+  });
+
+  it('preserves the column by title on a kanban→kanban merge', () => {
+    const a = s().createBoard('kanban');
+    const b = s().createBoard('kanban');
+    const aDone = board(a).columns.find((c) => c.isDone)!.id;
+    const bDone = board(b).columns.find((c) => c.isDone)!.id;
+    const t = s().addTask(a, { title: 'x', columnId: aDone });
+    s().mergeBoardInto(a, b);
+    expect(task(t).columnId).toBe(bDone);
+  });
+
+  it('completes Done cards when merging a Kanban board into a TODO list', () => {
+    const a = s().createBoard('kanban');
+    const b = s().createBoard('todo');
+    const done = board(a).columns.find((c) => c.isDone)!.id;
+    const t = s().addTask(a, { title: 'x', columnId: done });
+    s().mergeBoardInto(a, b);
+    expect(task(t).columnId).toBeNull();
+    expect(task(t).completed).toBe(true);
+  });
+
+  it('sends completed tasks to Done when merging a TODO list into a Kanban board', () => {
+    const a = s().createBoard('todo');
+    const b = s().createBoard('kanban');
+    const done = board(b).columns.find((c) => c.isDone)!.id;
+    const t = s().addTask(a, { title: 'x' });
+    s().toggleComplete(t);
+    s().mergeBoardInto(a, b);
+    expect(task(t).columnId).toBe(done);
+    expect(task(t).completed).toBe(false);
+  });
+});
+
+describe('convertBoard', () => {
+  it('todo → kanban: adds columns; completed cards land in Done', () => {
+    const id = s().createBoard('todo');
+    const t1 = s().addTask(id, { title: 'open' });
+    const t2 = s().addTask(id, { title: 'done' });
+    s().toggleComplete(t2);
+
+    s().convertBoard(id);
+    const b = board(id);
+    expect(b.type).toBe('kanban');
+    expect(b.columns).toHaveLength(4);
+    const first = b.columns[0].id;
+    const done = b.columns.find((c) => c.isDone)!.id;
+    expect(task(t1).columnId).toBe(first);
+    expect(task(t2).columnId).toBe(done);
+  });
+
+  it('kanban → todo: Done cards become completed; columns cleared', () => {
+    const id = s().createBoard('kanban');
+    const c0 = board(id).columns[0].id;
+    const done = board(id).columns.find((c) => c.isDone)!.id;
+    const t1 = s().addTask(id, { title: 'pending', columnId: c0 });
+    const t2 = s().addTask(id, { title: 'finished', columnId: done });
+
+    s().convertBoard(id);
+    const b = board(id);
+    expect(b.type).toBe('todo');
+    expect(b.columns).toHaveLength(0);
+    expect(task(t1).columnId).toBeNull();
+    expect(task(t1).completed).toBe(false);
+    expect(task(t2).columnId).toBeNull();
+    expect(task(t2).completed).toBe(true);
+  });
+
+  it('kanban → todo clears a stale completed flag on a non-Done card', () => {
+    const id = s().createBoard('kanban');
+    const c0 = board(id).columns[0].id;
+    const a = s().addTask(id, { title: 'a', columnId: c0 });
+    s().editTask(a, { completed: true }); // stale flag (ignored on kanban)
+    s().convertBoard(id);
+    expect(task(a).completed).toBe(false);
+  });
+});
+
 describe('export / import', () => {
   it('round-trips with regenerated ids (collision-proof)', () => {
     const id = s().createBoard('kanban');
