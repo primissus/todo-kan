@@ -91,6 +91,11 @@ export interface UiState {
   setArchivedOpen: (v: boolean) => void;
   kanbanColumnsOpen: boolean;
   setKanbanColumnsOpen: (v: boolean) => void;
+  /** Item whose per-item actions menu (the ⋮ dropdown on a card/row/board card)
+   *  is open; null = none. Lifted here so the global keymap (`.`) can open the
+   *  cursored item's menu, and only ONE menu is ever open app-wide. */
+  actionsMenuId: string | null;
+  setActionsMenuId: (id: string | null) => void;
 
   /** Bulk task selection (board-scoped, ephemeral). When `selectionMode` is on,
    *  cards/rows show a checkbox and a SelectionToolbar exposes Move/Archive/Delete.
@@ -145,6 +150,7 @@ export const initialUiState = {
   deleteId: null,
   archivedOpen: false,
   kanbanColumnsOpen: false,
+  actionsMenuId: null,
   selectionMode: false,
   selectedTaskIds: [] as string[],
   selectorOpen: false,
@@ -191,6 +197,7 @@ export const useUiStore = create<UiState>((set) => ({
   setDeleteId: (id) => set({ deleteId: id }),
   setArchivedOpen: (v) => set({ archivedOpen: v }),
   setKanbanColumnsOpen: (v) => set({ kanbanColumnsOpen: v }),
+  setActionsMenuId: (id) => set({ actionsMenuId: id }),
 
   enterSelectionMode: () => set({ selectionMode: true }),
   exitSelectionMode: () =>
@@ -217,6 +224,7 @@ export const useUiStore = create<UiState>((set) => ({
       deleteId: null,
       archivedOpen: false,
       kanbanColumnsOpen: false,
+      actionsMenuId: null,
       selectionMode: false,
       selectedTaskIds: [],
       selectorOpen: false,

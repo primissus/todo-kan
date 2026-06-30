@@ -37,6 +37,7 @@ export const KEYMAP: KeyBinding[] = [
 
   // Actions
   { keys: ['Enter'], label: 'Open the selected item (edit task · open board · add a card on a Kanban column header)', category: 'Actions' },
+  { keys: ['.'], label: 'Open the actions menu for the selected item (Move · Clone · View · Delete · or the board card menu on Home)', category: 'Actions' },
   { keys: ['Shift', 'N'], label: 'New task — in the cursor’s column on Kanban / new board (Home)', category: 'Actions', vimOnly: true },
   { keys: ['a'], label: 'Archive the selected item (in select mode: the whole selection)', category: 'Actions', vimOnly: true },
   { keys: ['Shift', 'A'], label: 'Toggle archived (drawer on a board · show archived on Home)', category: 'Actions', vimOnly: true },

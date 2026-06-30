@@ -1,15 +1,17 @@
 import { useEffect, useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Archive, Bell, CalendarClock, Eye, MessageSquare } from 'lucide-react';
+import { Archive, Bell, CalendarClock, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Markdown } from '@/components/Markdown';
+import { TaskActionsMenu } from '@/features/taskActions/TaskActionsMenu';
 import { cn } from '@/lib/utils';
 import { formatDateTime } from '@/lib/datetime';
 import { useAppStore } from '@/store/useAppStore';
 import { useUiStore } from '@/store/useUiStore';
 import {
+  useIsActionsMenuOpen,
   useIsMoveTarget,
   useIsSelected,
   useIsTaskSelected,
@@ -44,6 +46,7 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
   const archiveTask = useAppStore((s) => s.archiveTask);
   const selected = useIsSelected(task.id);
   const moveTarget = useIsMoveTarget(task.id);
+  const menuOpen = useIsActionsMenuOpen(task.id);
   const noteCount = task.notes?.length ?? 0;
 
   const nodeRef = useRef<HTMLDivElement | null>(null);
@@ -115,9 +118,10 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
           <div
             className={cn(
               'flex shrink-0 gap-0.5 opacity-0 transition-opacity group-hover/card:opacity-100',
-              // Selected via the keyboard cursor → reveal the actions (it has no
-              // hover), matching how a focused row exposes them in the TODO list.
-              selected && 'opacity-100',
+              // Selected via the keyboard cursor / an open actions menu → reveal
+              // the actions (the cursor has no hover, and a keyboard-opened menu
+              // needs its trigger visible to anchor), matching the TODO row.
+              (selected || menuOpen) && 'opacity-100',
             )}
           >
             {noteCount === 0 && (
@@ -136,22 +140,18 @@ export function KanbanCard({ task, onEdit, overlay = false }: KanbanCardProps) {
               variant="ghost"
               size="icon"
               className="size-7"
-              aria-label="Open card"
-              {...stopDrag}
-              onClick={onEdit}
-            >
-              <Eye className="size-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7"
               aria-label="Archive card"
               {...stopDrag}
               onClick={() => archiveTask(task.id)}
             >
               <Archive className="size-3.5" />
             </Button>
+            <TaskActionsMenu
+              taskId={task.id}
+              onView={() => onEdit?.()}
+              iconClassName="size-3.5"
+              onTriggerPointerDown={stopDrag.onPointerDown}
+            />
           </div>
         )}
       </div>

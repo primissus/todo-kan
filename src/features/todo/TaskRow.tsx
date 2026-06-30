@@ -5,18 +5,19 @@ import {
   Archive,
   Bell,
   CalendarClock,
-  Eye,
   GripVertical,
   MessageSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Markdown } from '@/components/Markdown';
+import { TaskActionsMenu } from '@/features/taskActions/TaskActionsMenu';
 import { cn } from '@/lib/utils';
 import { formatDateTime } from '@/lib/datetime';
 import { useAppStore } from '@/store/useAppStore';
 import { useUiStore } from '@/store/useUiStore';
 import {
+  useIsActionsMenuOpen,
   useIsMoveTarget,
   useIsSelected,
   useIsTaskSelected,
@@ -46,6 +47,7 @@ export function TaskRow({ task, onEdit }: TaskRowProps) {
   const archiveTask = useAppStore((s) => s.archiveTask);
   const selected = useIsSelected(task.id);
   const moveTarget = useIsMoveTarget(task.id);
+  const menuOpen = useIsActionsMenuOpen(task.id);
   const noteCount = task.notes?.length ?? 0;
   const overdue =
     task.dueAt != null && !task.completed && task.dueAt < Date.now();
@@ -182,7 +184,10 @@ export function TaskRow({ task, onEdit }: TaskRowProps) {
           <div
             className={cn(
               'flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100',
-              selected && 'opacity-100',
+              // Keyboard cursor / an open actions menu also reveal the row's
+              // actions (neither has hover; a keyboard-opened menu needs its
+              // trigger visible to anchor).
+              (selected || menuOpen) && 'opacity-100',
             )}
           >
             <Button
@@ -201,20 +206,12 @@ export function TaskRow({ task, onEdit }: TaskRowProps) {
               variant="ghost"
               size="icon"
               className="size-7"
-              aria-label="Open task"
-              onClick={onEdit}
-            >
-              <Eye className="size-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7"
               aria-label="Archive task"
               onClick={() => archiveTask(task.id)}
             >
               <Archive className="size-4" />
             </Button>
+            <TaskActionsMenu taskId={task.id} onView={onEdit} />
           </div>
           )}
         </div>

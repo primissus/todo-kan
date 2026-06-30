@@ -437,6 +437,16 @@ function shouldHandle(e: KeyboardEvent, ui: UiState): boolean {
   if (document.querySelector('[data-slot="dialog-content"][data-state="open"]')) {
     return false;
   }
+  // An open per-item actions menu (the ⋮ dropdown) owns the keyboard too: Radix
+  // handles its own arrow/Enter/Esc navigation, so the global cursor must yield
+  // while it's open (it portals outside #root, so focus checks alone miss it).
+  if (
+    document.querySelector(
+      '[data-slot="dropdown-menu-content"][data-state="open"]',
+    )
+  ) {
+    return false;
+  }
   // Only ⌘/Ctrl+K is a registered combo; leave every other modified key alone.
   if (e.metaKey || e.ctrlKey || e.altKey) {
     return !e.altKey && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k';
@@ -508,6 +518,18 @@ function handleKey(e: KeyboardEvent, route: Route): void {
   if (key === '?') {
     e.preventDefault();
     ui.setHelpOpen(true);
+    return;
+  }
+  // `.` opens the cursored item's actions menu (the ⋮ dropdown) — the non-Vim way
+  // to reach Move / Clone / View / Delete on a card or row, and the board card's
+  // menu on Home. Available in both modes; a column header has no menu.
+  if (key === '.') {
+    if (ui.selectionMode || !ui.selectedId) return;
+    if (isKanbanHeader(route, ui.selectedId)) return;
+    // On Home with a search query the board grid is unmounted — nothing to anchor.
+    if (ctx === 'home' && ui.homeQuery.trim().length > 0) return;
+    e.preventDefault();
+    ui.setActionsMenuId(ui.selectedId);
     return;
   }
   if (key === 'Escape') {

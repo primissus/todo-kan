@@ -233,6 +233,63 @@ describe('moveTasksToBoard', () => {
   });
 });
 
+describe('cloneTask', () => {
+  it('duplicates a task in place with fresh ids, right after the source', () => {
+    const id = s().createBoard('kanban');
+    const c0 = board(id).columns[0].id;
+    const a = s().addTask(id, { title: 'a', columnId: c0 });
+    const b = s().addTask(id, { title: 'b', columnId: c0 });
+
+    const cloneId = s().cloneTask(a);
+    expect(cloneId).not.toBe(a);
+    // Same board + column + title, but an independent record.
+    expect(task(cloneId).boardId).toBe(id);
+    expect(task(cloneId).columnId).toBe(c0);
+    expect(task(cloneId).title).toBe('a');
+    // Inserted right after the source (before b).
+    expect(board(id).taskIds).toEqual([a, cloneId, b]);
+  });
+
+  it('carries completion + due date and copies notes with fresh ids', () => {
+    const id = s().createBoard('todo');
+    const future = Date.now() + 60_000;
+    const a = s().addTask(id, { title: 'a', dueAt: 111, remindAt: future });
+    s().toggleComplete(a);
+    s().addNote(a, 'hello');
+    const srcNoteId = task(a).notes[0].id;
+
+    const cloneId = s().cloneTask(a);
+    const clone = task(cloneId);
+    expect(clone.completed).toBe(true);
+    expect(clone.dueAt).toBe(111); // due date is metadata — carried as-is
+    expect(clone.remindAt).toBe(future); // a still-pending reminder is kept
+    expect(clone.archived).toBe(false);
+    expect(clone.notes).toHaveLength(1);
+    expect(clone.notes[0].text).toBe('hello');
+    expect(clone.notes[0].id).not.toBe(srcNoteId);
+    // Editing the clone's note must not touch the original.
+    s().editNote(cloneId, clone.notes[0].id, 'changed');
+    expect(task(a).notes[0].text).toBe('hello');
+  });
+
+  it('drops an already-elapsed reminder so the clone does not re-fire it', () => {
+    const id = s().createBoard('todo');
+    const past = Date.now() - 60_000;
+    const a = s().addTask(id, { title: 'a', remindAt: past });
+    const cloneId = s().cloneTask(a);
+    expect(task(a).remindAt).toBe(past); // source untouched
+    expect(task(cloneId).remindAt).toBeUndefined();
+  });
+
+  it('is a no-op for an unknown task id', () => {
+    const id = s().createBoard('todo');
+    s().addTask(id, { title: 'a' });
+    const before = board(id).taskIds.slice();
+    s().cloneTask('missing');
+    expect(board(id).taskIds).toEqual(before);
+  });
+});
+
 describe('cloneBoard', () => {
   it('deep-copies a board + its tasks with fresh ids, inserted after the source', () => {
     const id = s().createBoard('kanban');

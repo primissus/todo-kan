@@ -27,3 +27,8 @@ export function useSelectionMode(): boolean {
 export function useIsTaskSelected(id: string): boolean {
   return useUiStore((s) => s.selectedTaskIds.includes(id));
 }
+
+/** True when this item's per-item actions menu (⋮) is the open one (granular). */
+export function useIsActionsMenuOpen(id: string): boolean {
+  return useUiStore((s) => s.actionsMenuId === id);
+}

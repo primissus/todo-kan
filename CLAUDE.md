@@ -9,6 +9,9 @@ pnpm dev | build | build:single | preview | typecheck | lint | test
 ```
 After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and `pnpm build:single`.
 
+## Before shipping
+**Bump the version in `package.json`** before merging the release PR to main. Follow semver (major.minor.patch). The app version is injected at build time and shown in Settings.
+
 ## Top things to know
 - **Tailwind v4 + shadcn/ui only — no CSS Modules.** Use semantic tokens (`bg-background`, …).
 - **React 19 required** (shadcn components are ref-as-prop). Don't downgrade.
@@ -24,7 +27,9 @@ After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and
   cursor/overlay state in the persisted store.
 - **Keyboard nav**: one global `keydown` listener in `src/hooks/useGlobalKeymap.ts`
   (mounted once in `App`) drives a Vim-style cursor (j/k/h/l + arrows), move-mode
-  (`m`), actions (Enter/`a`/Shift+A/Shift+C/Shift+D-delete/Shift+N), bulk
+  (`m`), actions (Enter/`a`/Shift+A/Shift+C/Shift+D-delete/Shift+N), the per-item
+  **actions menu** (`.` — opens the cursored item's ⋮ dropdown; works in BOTH
+  modes, it's the non-Vim way to reach Move/Clone/View/Delete), bulk
   **selection** (`s` mode · `x` toggle item · Shift+M move · `a`/Shift+D act on the
   selection in select mode), search (`/` ⌘K), hints (`f`), help (`?`). The **Home
   list grid is navigated 2D**: ↑/↓ (j/k) move by a row, ←/→ (h/l) by a column —
@@ -39,7 +44,12 @@ After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and
   `HintOverlay` scopes its labels to the topmost open dialog) — it still yields
   while you're typing in a field. Cards/rows read "am I selected?" via the
   granular selectors in `src/hooks/useSelection.ts`; a **selected card/row also
-  reveals its hover action buttons** (the keyboard cursor has no hover).
+  reveals its hover action buttons** (the keyboard cursor has no hover, and so
+  does an open ⋮ menu — its trigger must stay visible to anchor). While **any
+  Radix dropdown is open the global keymap yields** (`shouldHandle` bails on an
+  open `[data-slot="dropdown-menu-content"]`), so the menu owns its own
+  arrow/Enter/Esc navigation — that's what makes `.` → arrow-navigate the ⋮ menu
+  work without the background cursor also moving.
   **Kanban column headers are cursor targets**: each column is navigated as the
   list `[header, ...cards]`, so ↑ on the first card lands on the header and headers
   step ←/→ across columns (even empty ones); `selectedId` then holds a column id
@@ -118,9 +128,23 @@ After changes: `pnpm typecheck && pnpm lint && pnpm test`, then `pnpm build` and
   render OUTSIDE the menu** (a `Dialog` inside a closing `DropdownMenuContent`
   unmounts); `useBoardListActions` returns its menu `items` and `dialogs`
   separately for this.
+- **Per-task actions menu** (`src/features/taskActions/TaskActionsMenu.tsx`): the
+  ⋮ dropdown on every Kanban card / TODO row, holding **Move to… · Clone · View ·
+  Delete**. **Archive stays a standalone icon button** on the card (the one quick
+  item-level action that isn't in the menu); there is **no longer a dedicated
+  open/"eye" button** — View lives in the menu and the title click / Enter still
+  open the dialog. The items reuse existing flows so the menu needs **no dialogs of
+  its own**: Move → `requestMove([id])` (the lifted `MoveToListDialog`), Delete →
+  `setDeleteId(id)` (the lifted single-task `ConfirmModal`), View → the `onView`
+  prop (`setEditId`), Clone → the new **`cloneTask`** store action (duplicate in
+  place: fresh ids incl. notes, same column/status, inserted right after the
+  source). Its **open state is `useUiStore.actionsMenuId`** (not local state — only
+  one ⋮ is open app-wide) so the keymap's `.` can open the cursored item's menu;
+  the Home `BoardCard` menu is controlled by the same key so `.` works on Home too.
+  Read "is my ⋮ open?" via `useIsActionsMenuOpen(id)`.
 - **Task view dialog** (`src/features/TaskDialog.tsx`): the unified view/edit modal
-  opened via `useUiStore.editId` (Enter / clicking a card or its open button — an
-  **eye / "view"** icon on the card/row, since the dialog opens read-only first). It
+  opened via `useUiStore.editId` (Enter / clicking a card title, or the ⋮ menu's
+  **View** item — the dialog opens read-only first). It
   opens **read-only** (`editMode` state, reset to `false` when the dialog
   **closes** so the next open paints read-only with no edit-form flash): the title
   is a heading, the description renders **Markdown** (see below), due date + labels

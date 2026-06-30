@@ -608,6 +608,70 @@ describe('bulk selection (keyboard)', () => {
   });
 });
 
+describe('actions menu shortcut (.)', () => {
+  it('opens the cursored task’s actions menu; Clone duplicates it', async () => {
+    const user = userEvent.setup();
+    const { a } = await renderTodo(); // tasks "One", "Two"
+    fireEvent.keyDown(window, { key: 'j' }); // cursor → One
+    fireEvent.keyDown(window, { key: '.' });
+    expect(useUiStore.getState().actionsMenuId).toBe(a);
+
+    await user.click(await screen.findByRole('menuitem', { name: 'Clone' }));
+    const ones = Object.values(useAppStore.getState().tasks).filter(
+      (t) => t.title === 'One',
+    );
+    expect(ones).toHaveLength(2); // original + clone
+    // Selecting an item closes the menu.
+    await waitFor(() =>
+      expect(useUiStore.getState().actionsMenuId).toBeNull(),
+    );
+  });
+
+  it('opens the cursored board’s actions menu on Home', async () => {
+    const { b } = await renderHome();
+    fireEvent.keyDown(window, { key: 'j' }); // cursor → Board B (first)
+    fireEvent.keyDown(window, { key: '.' });
+    expect(useUiStore.getState().actionsMenuId).toBe(b);
+  });
+
+  it('works with Vim keys off (it is an always-available shortcut)', async () => {
+    const { a } = await renderTodo();
+    act(() => useUiStore.setState({ vimEnabled: false }));
+    fireEvent.keyDown(window, { key: 'ArrowDown' }); // cursor → One
+    fireEvent.keyDown(window, { key: '.' });
+    expect(useUiStore.getState().actionsMenuId).toBe(a);
+  });
+
+  it('is a no-op with no cursor, in selection mode, or on a Kanban header', async () => {
+    await renderTodo();
+    fireEvent.keyDown(window, { key: '.' }); // no cursor
+    expect(useUiStore.getState().actionsMenuId).toBeNull();
+
+    fireEvent.keyDown(window, { key: 'j' }); // cursor → a task
+    fireEvent.keyDown(window, { key: 's' }); // enter selection mode
+    fireEvent.keyDown(window, { key: '.' });
+    expect(useUiStore.getState().actionsMenuId).toBeNull();
+  });
+
+  it('on a Kanban column header, . does not open a menu', async () => {
+    const { col0 } = await renderKanban();
+    fireEvent.keyDown(window, { key: 'j' });
+    fireEvent.keyDown(window, { key: 'k' }); // cursor → column header
+    expect(useUiStore.getState().selectedId).toBe(col0);
+    fireEvent.keyDown(window, { key: '.' });
+    expect(useUiStore.getState().actionsMenuId).toBeNull();
+  });
+
+  it('holds the cursor still while the actions menu is open (menu owns keys)', async () => {
+    const { a } = await renderTodo();
+    fireEvent.keyDown(window, { key: 'j' }); // cursor → One
+    fireEvent.keyDown(window, { key: '.' }); // open the menu
+    await screen.findByRole('menuitem', { name: 'Clone' });
+    fireEvent.keyDown(window, { key: 'j' }); // should be swallowed
+    expect(useUiStore.getState().selectedId).toBe(a); // did not advance
+  });
+});
+
 describe('Home lists grid navigation', () => {
   it('moves by a row vertically and by a column horizontally', async () => {
     const realMM = window.matchMedia;

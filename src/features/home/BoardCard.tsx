@@ -9,7 +9,12 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useIsMoveTarget, useIsSelected } from '@/hooks/useSelection';
+import {
+  useIsActionsMenuOpen,
+  useIsMoveTarget,
+  useIsSelected,
+} from '@/hooks/useSelection';
+import { useUiStore } from '@/store/useUiStore';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +43,8 @@ export function BoardCard({ board, archived = false }: BoardCardProps) {
   const listActions = useBoardListActions(board);
   const selected = useIsSelected(board.id);
   const moveTarget = useIsMoveTarget(board.id);
+  const menuOpen = useIsActionsMenuOpen(board.id);
+  const setActionsMenuId = useUiStore((s) => s.setActionsMenuId);
 
   const nodeRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -100,7 +107,10 @@ export function BoardCard({ board, archived = false }: BoardCardProps) {
       </button>
 
       <div className="absolute right-2 top-2">
-        <DropdownMenu>
+        <DropdownMenu
+          open={menuOpen}
+          onOpenChange={(o) => setActionsMenuId(o ? board.id : null)}
+        >
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"

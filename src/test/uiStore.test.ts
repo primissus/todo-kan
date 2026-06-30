@@ -69,6 +69,15 @@ describe('useUiStore', () => {
     expect(ui().bulkDeleteIds).toEqual(['t1', 't2']);
   });
 
+  it('tracks the open per-item actions menu', () => {
+    const ui = () => useUiStore.getState();
+    expect(ui().actionsMenuId).toBeNull();
+    ui().setActionsMenuId('t1');
+    expect(ui().actionsMenuId).toBe('t1');
+    ui().setActionsMenuId(null);
+    expect(ui().actionsMenuId).toBeNull();
+  });
+
   it('resetModals exits selection mode and clears all selection/move/delete flags', () => {
     const ui = () => useUiStore.getState();
     ui().enterSelectionMode();
@@ -76,6 +85,7 @@ describe('useUiStore', () => {
     ui().setSelectorOpen(true);
     ui().openMove(['t1']);
     ui().setBulkDeleteOpen(true);
+    ui().setActionsMenuId('t1');
     ui().resetModals();
     expect(ui().selectionMode).toBe(false);
     expect(ui().selectedTaskIds).toEqual([]);
@@ -83,6 +93,7 @@ describe('useUiStore', () => {
     expect(ui().moveOpen).toBe(false);
     expect(ui().moveTaskIds).toEqual([]);
     expect(ui().bulkDeleteOpen).toBe(false);
+    expect(ui().actionsMenuId).toBeNull();
   });
 
   it('toggles the home "show archived" flag', () => {

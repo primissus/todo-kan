@@ -70,6 +70,9 @@ interface Actions {
   toggleComplete: (taskId: string) => void;
   archiveTask: (taskId: string) => void;
   unarchiveTask: (taskId: string) => void;
+  /** Duplicate a task in place (fresh ids incl. its notes), inserted right after
+   *  the source in its board — same column/status. Returns the new task id. */
+  cloneTask: (taskId: string) => TaskId;
   // bulk task ops (selection mode)
   archiveTasks: (taskIds: string[]) => void;
   deleteTasks: (taskIds: string[]) => void;
@@ -380,6 +383,47 @@ export const useAppStore = create<AppState>()(
             tk.updatedAt = now();
           }
         }),
+
+      cloneTask: (taskId) => {
+        const id = newTaskId();
+        set((s) => {
+          const src = s.tasks[taskId];
+          if (!src) return;
+          const b = s.boards[src.boardId];
+          if (!b) return;
+          const t = now();
+          s.tasks[id] = {
+            id,
+            boardId: src.boardId,
+            title: src.title,
+            description: src.description,
+            tags: [...src.tags],
+            completed: src.completed,
+            columnId: src.columnId,
+            archived: false,
+            notes: (src.notes ?? []).map((n) => ({
+              id: newNoteId(),
+              text: n.text,
+              createdAt: n.createdAt,
+              updatedAt: n.updatedAt,
+            })),
+            dueAt: src.dueAt,
+            // Only carry a reminder that's still pending. A past remindAt would
+            // re-fire on the clone: the scheduler dedups per task id, so the
+            // fresh id defeats the source's "already fired" mark and a stale
+            // notification would pop on the next tick (useReminderScheduler).
+            remindAt: src.remindAt != null && src.remindAt > t ? src.remindAt : undefined,
+            createdAt: t,
+            updatedAt: t,
+          };
+          // Drop the copy right after the original in board order.
+          const idx = b.taskIds.indexOf(taskId as TaskId);
+          if (idx >= 0) b.taskIds.splice(idx + 1, 0, id);
+          else b.taskIds.push(id);
+          b.updatedAt = t;
+        });
+        return id;
+      },
 
       archiveTasks: (taskIds) =>
         set((s) => {

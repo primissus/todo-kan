@@ -139,7 +139,7 @@ describe('TaskDialog (read-only view → edit + discussion)', () => {
     const t = useAppStore.getState().addTask(id, { title: 'Original' });
     render(<TodoView boardId={id} />);
 
-    await user.click(screen.getByRole('button', { name: 'Open task' }));
+    await user.click(screen.getByRole('button', { name: 'Original' }));
 
     // Read-only by default: the title shows as a heading and the discussion is
     // present, but there is no editable Title field yet.
@@ -170,7 +170,7 @@ describe('TaskDialog (read-only view → edit + discussion)', () => {
     const t = useAppStore.getState().addTask(id, { title: 'Original' });
     render(<TodoView boardId={id} />);
 
-    await user.click(screen.getByRole('button', { name: 'Open task' }));
+    await user.click(screen.getByRole('button', { name: 'Original' }));
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'E', shiftKey: true });
     const titleInput = await screen.findByLabelText('Title');
     await user.clear(titleInput);
@@ -193,7 +193,7 @@ describe('TaskDialog (read-only view → edit + discussion)', () => {
     const t = useAppStore.getState().addTask(id, { title: 'Original' });
     render(<TodoView boardId={id} />);
 
-    await user.click(screen.getByRole('button', { name: 'Open task' }));
+    await user.click(screen.getByRole('button', { name: 'Original' }));
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'E', shiftKey: true });
     const titleInput = await screen.findByLabelText('Title');
     await user.type(titleInput, ' edited');
@@ -222,7 +222,7 @@ describe('TaskDialog (read-only view → edit + discussion)', () => {
     useAppStore.getState().addTask(id, { title: 'Original' });
     render(<TodoView boardId={id} />);
 
-    await user.click(screen.getByRole('button', { name: 'Open task' }));
+    await user.click(screen.getByRole('button', { name: 'Original' }));
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'E', shiftKey: true });
     const titleInput = await screen.findByLabelText('Title');
     titleInput.focus();
@@ -242,7 +242,7 @@ describe('TaskDialog (read-only view → edit + discussion)', () => {
     useAppStore.getState().addTask(id, { title: 'Original' });
     render(<TodoView boardId={id} />);
 
-    await user.click(screen.getByRole('button', { name: 'Open task' }));
+    await user.click(screen.getByRole('button', { name: 'Original' }));
     const dialog = await screen.findByRole('dialog');
     fireEvent.keyDown(dialog, { key: 'Enter', metaKey: true });
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -254,7 +254,7 @@ describe('TaskDialog (read-only view → edit + discussion)', () => {
     useAppStore.getState().addTask(id, { title: 'Original' });
     render(<TodoView boardId={id} />);
 
-    await user.click(screen.getByRole('button', { name: 'Open task' }));
+    await user.click(screen.getByRole('button', { name: 'Original' }));
     await screen.findByRole('heading', { name: 'Original' });
     expect(screen.queryByLabelText('Title')).toBeNull();
 
@@ -269,7 +269,7 @@ describe('TaskDialog (read-only view → edit + discussion)', () => {
     useAppStore.getState().addTask(id, { title: 'Original' });
     render(<TodoView boardId={id} />);
 
-    await user.click(screen.getByRole('button', { name: 'Open task' }));
+    await user.click(screen.getByRole('button', { name: 'Original' }));
     await screen.findByRole('heading', { name: 'Original' });
 
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'C', shiftKey: true });
@@ -282,7 +282,7 @@ describe('TaskDialog (read-only view → edit + discussion)', () => {
     useAppStore.getState().addTask(id, { title: 'Original' });
     render(<TodoView boardId={id} />);
 
-    await user.click(screen.getByRole('button', { name: 'Open task' }));
+    await user.click(screen.getByRole('button', { name: 'Original' }));
     await screen.findByRole('heading', { name: 'Original' });
 
     // Focus the comment box — a field in the read-only view.
@@ -306,7 +306,7 @@ describe('TaskDialog (read-only view → edit + discussion)', () => {
     useAppStore.getState().addTask(id, { title: 'Original' });
     render(<TodoView boardId={id} />);
 
-    await user.click(screen.getByRole('button', { name: 'Open task' }));
+    await user.click(screen.getByRole('button', { name: 'Original' }));
     await screen.findByRole('heading', { name: 'Original' });
 
     // Still read-only (no Title field), but the Reminder picker is right there.
@@ -321,11 +321,64 @@ describe('TaskDialog (read-only view → edit + discussion)', () => {
     useAppStore.getState().addTask(id, { title: 'Card', columnId: col0 });
     render(<KanbanView boardId={id} />);
 
-    await user.click(screen.getByRole('button', { name: 'Open card' }));
+    // The sortable card wrapper is also role="button" (dnd-kit) with the same
+    // accessible name, so target the real <button> title to open the dialog.
+    const cardTitle = screen
+      .getAllByRole('button', { name: 'Card' })
+      .find((el) => el.tagName === 'BUTTON')!;
+    await user.click(cardTitle);
     await screen.findByRole('heading', { name: 'Card' });
 
     expect(screen.queryByLabelText('Title')).toBeNull();
     expect(screen.getByRole('combobox', { name: 'Status' })).toBeInTheDocument();
+  });
+});
+
+describe('Per-task actions menu (⋮)', () => {
+  async function renderOneTodoTask() {
+    const id = useAppStore.getState().createBoard('todo');
+    const t = useAppStore.getState().addTask(id, { title: 'Solo' });
+    render(<TodoView boardId={id} />);
+    return { id, t: t as string };
+  }
+
+  it('View opens the read-only task dialog', async () => {
+    const user = userEvent.setup();
+    const { t } = await renderOneTodoTask();
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'View' }));
+    expect(useUiStore.getState().editId).toBe(t);
+    expect(
+      await screen.findByRole('heading', { name: 'Solo' }),
+    ).toBeInTheDocument();
+  });
+
+  it('Move opens the move-to-list dialog scoped to just this task', async () => {
+    const user = userEvent.setup();
+    const { t } = await renderOneTodoTask();
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Move to…' }));
+    expect(useUiStore.getState().moveOpen).toBe(true);
+    expect(useUiStore.getState().moveTaskIds).toEqual([t]);
+  });
+
+  it('Delete opens the single-task delete confirm', async () => {
+    const user = userEvent.setup();
+    const { t } = await renderOneTodoTask();
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+    expect(useUiStore.getState().deleteId).toBe(t);
+  });
+
+  it('Clone duplicates the task in place (right after the source)', async () => {
+    const user = userEvent.setup();
+    const { id, t } = await renderOneTodoTask();
+    await user.click(screen.getByRole('button', { name: 'Task actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Clone' }));
+    const ids = useAppStore.getState().boards[id].taskIds;
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).toBe(t);
+    expect(useAppStore.getState().tasks[ids[1]].title).toBe('Solo');
   });
 });
 
@@ -337,8 +390,8 @@ describe('Selection mode', () => {
     useUiStore.getState().enterSelectionMode();
     render(<TodoView boardId={id} />);
 
-    // The whole row becomes the click target; the open/archive/complete controls go away.
-    expect(screen.queryByRole('button', { name: 'Open task' })).toBeNull();
+    // The whole row becomes the click target; the actions menu / complete controls go away.
+    expect(screen.queryByRole('button', { name: 'Task actions' })).toBeNull();
     expect(
       screen.queryByRole('checkbox', { name: /toggle complete/i }),
     ).toBeNull();
@@ -360,7 +413,7 @@ describe('Selection mode', () => {
     useUiStore.getState().enterSelectionMode();
     render(<KanbanView boardId={id} />);
 
-    expect(screen.queryByRole('button', { name: 'Open card' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Task actions' })).toBeNull();
 
     const card = screen.getByRole('button', { name: /Card X/ });
     await user.click(card);
