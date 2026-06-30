@@ -4,6 +4,18 @@ Working guide for AI agents (and humans) editing **todo-kan**. Read this before
 making changes. Companion docs: [REQUIREMENTS.md](./REQUIREMENTS.md),
 [PLAN.md](./PLAN.md), [PROGRESS.md](./PROGRESS.md).
 
+## Project context
+
+Axis-specific context docs — load the one matching your task (this guide stays the
+deep reference):
+
+- Architecture → [.context/architecture.md](./.context/architecture.md)
+- Conventions → [.context/conventions.md](./.context/conventions.md)
+- Decisions → [.context/decisions.md](./.context/decisions.md)
+- Glossary → [.context/glossary.md](./.context/glossary.md)
+- Workflow → [.context/workflow.md](./.context/workflow.md)
+- Known issues → [.context/known-issues.md](./.context/known-issues.md)
+
 ## What this is
 
 A local-first SPA for multiple TODO lists and Kanban boards. No backend — all
